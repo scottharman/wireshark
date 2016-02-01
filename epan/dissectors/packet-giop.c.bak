@@ -3654,7 +3654,7 @@ guint32 get_CDR_wstring(tvbuff_t *tvb, const gchar **seq, int *offset, gboolean 
 #ifdef DEBUG
   if (slength>200) {
         fprintf(stderr, "giop:get_CDR_wstring, length %u > 200, truncating to 5 \n", slength);
-        //slength = 5;            /* better than core dumping during debug */
+        slength = 5;            /* better than core dumping during debug */
   }
 #endif
 

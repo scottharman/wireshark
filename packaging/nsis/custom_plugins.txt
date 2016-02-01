@@ -1,3 +1,7 @@
 ;Add your custom plugins directives here
 ; Example:
 ;File "${STAGING_DIR}\plugins\foo.dll"
+File "${STAGING_DIR}\plugins\cnad.dll"
+File "${STAGING_DIR}\plugins\cqp.dll"
+File "${STAGING_DIR}\plugins\qcp.dll"
+File "${STAGING_DIR}\plugins\sttp.dll"
