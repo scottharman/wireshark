@@ -175,7 +175,7 @@ win32 {
 #tap_register.CONFIG += no_link
 QMAKE_EXTRA_COMPILERS += tap_register
 
-INCLUDEPATH += ../.. ../../wiretap
+INCLUDEPATH += ../..
 win32:INCLUDEPATH += \
     $${WIRESHARK_LIB_DIR}/gtk2/include/glib-2.0 $${WIRESHARK_LIB_DIR}/gtk2/lib/glib-2.0/include \
     $${WIRESHARK_LIB_DIR}/gtk3/include/glib-2.0 $${WIRESHARK_LIB_DIR}/gtk3/lib/glib-2.0/include \
@@ -277,6 +277,7 @@ FORMS += \
     sctp_graph_byte_dialog.ui  \
     search_frame.ui \
     sequence_dialog.ui \
+    show_packet_bytes_dialog.ui \
     splash_overlay.ui \
     supported_protocols_dialog.ui \
     tap_parameter_dialog.ui \
@@ -320,6 +321,7 @@ HEADERS += $$HEADERS_WS_C \
     filter_action.h \
     filter_expression_frame.h \
     filter_expressions_preferences_frame.h \
+    find_line_edit.h \
     follow_stream_dialog.h \
     follow_stream_text.h \
     font_color_preferences_frame.h \
@@ -368,6 +370,7 @@ HEADERS += $$HEADERS_WS_C \
     search_frame.h \
     service_response_time_dialog.h \
     simple_statistics_dialog.h \
+    show_packet_bytes_dialog.h \
     splash_overlay.h \
     stats_tree_dialog.h \
     tango_colors.h \
@@ -711,6 +714,7 @@ SOURCES += \
     filter_dialog.cpp \
     filter_expression_frame.cpp \
     filter_expressions_preferences_frame.cpp \
+    find_line_edit.cpp \
     follow_stream_dialog.cpp \
     follow_stream_text.cpp \
     font_color_preferences_frame.cpp \
@@ -782,6 +786,7 @@ SOURCES += \
     service_response_time_dialog.cpp \
     simple_dialog.cpp \
     simple_statistics_dialog.cpp \
+    show_packet_bytes_dialog.cpp \
     sparkline_delegate.cpp \
     splash_overlay.cpp \
     stats_tree_dialog.cpp \

@@ -209,7 +209,7 @@ include_directories(
 	${CMAKE_SOURCE_DIR}
 	${CMAKE_SOURCE_DIR}/epan
 	${CMAKE_SOURCE_DIR}/tools/lemon
-	${CMAKE_SOURCE_DIR}/wiretap
+	${CMAKE_SOURCE_DIR}/extcap
 )
 
 include( CMakeOptions.txt )
@@ -267,7 +267,7 @@ if( CMAKE_C_COMPILER_ID MATCHES "MSVC")
 		# -D_ALLOW_KEYWORD_MACROS           For VS2012 onwards the, C++ STL does not permit macro redefinitions of keywords
 		#                                   (see http://msdn.microsoft.com/en-us/library/bb531344(v=vs.110).aspx)
 		#                                   This definition prevents the complaint about the redefinition of inline by WinPCap
-		#                                   in pcap-stdinc.h when compiling CPP files, e.g. the Qt UI
+		#                                   in pcap-stdinc.h when compiling C++ files, e.g. the Qt UI
 		/DPSAPI_VERSION=1
 		/DBUILD_WINDOWS
 		/D_ALLOW_KEYWORD_MACROS
@@ -379,7 +379,7 @@ else()
 		-Wshorten-64-to-32
 	)
 
-	set(WIRESHARK_CPP_ONLY_FLAGS
+	set(WIRESHARK_CXX_ONLY_FLAGS
 	)
 
 	set(WIRESHARK_EXTRA_COMPILER_COMMON_FLAGS
@@ -447,7 +447,7 @@ else()
 		-Wbad-function-cast
 	)
 
-	set(WIRESHARK_EXTRA_COMPILER_CPP_ONLY_FLAGS
+	set(WIRESHARK_EXTRA_COMPILER_CXX_ONLY_FLAGS
 	)
 
 	if(CMAKE_C_COMPILER_ID MATCHES "Clang")
@@ -458,7 +458,7 @@ else()
 			-Qunused-arguments
 		)
 
-		set(WIRESHARK_CPP_ONLY_FLAGS ${WIRESHARK_CPP_ONLY_FLAGS}
+		set(WIRESHARK_CXX_ONLY_FLAGS ${WIRESHARK_CXX_ONLY_FLAGS}
 		)
 	else()
 		set(WIRESHARK_COMMON_FLAGS ${WIRESHARK_COMMON_FLAGS}
@@ -487,7 +487,7 @@ else()
 	if(ENABLE_EXTRA_COMPILER_WARNINGS)   # This overrides -Werror
 		set(WIRESHARK_COMMON_FLAGS ${WIRESHARK_COMMON_FLAGS} ${WIRESHARK_EXTRA_COMPILER_COMMON_FLAGS})
 		set(WIRESHARK_C_ONLY_FLAGS ${WIRESHARK_C_ONLY_FLAGS} ${WIRESHARK_EXTRA_COMPILER_C_ONLY_FLAGS})
-		set(WIRESHARK_CPP_ONLY_FLAGS ${WIRESHARK_CPP_ONLY_FLAGS} ${WIRESHARK_EXTRA_COMPILER_CPP_ONLY_FLAGS})
+		set(WIRESHARK_CXX_ONLY_FLAGS ${WIRESHARK_CXX_ONLY_FLAGS} ${WIRESHARK_EXTRA_COMPILER_CXX_ONLY_FLAGS})
 	endif()
 
 	add_definitions(
@@ -497,7 +497,7 @@ else()
 endif()
 
 set( C_FLAG_TESTS ${WIRESHARK_COMMON_FLAGS} ${WIRESHARK_C_ONLY_FLAGS} )
-set( CPP_FLAG_TESTS ${WIRESHARK_COMMON_FLAGS} ${WIRESHARK_CPP_ONLY_FLAGS} )
+set( CXX_FLAG_TESTS ${WIRESHARK_COMMON_FLAGS} ${WIRESHARK_CXX_ONLY_FLAGS} )
 
 # Counterhack to work around some cache magic in CHECK_C_SOURCE_COMPILES
 include(CheckCCompilerFlag)
@@ -526,10 +526,10 @@ foreach(THIS_FLAG ${C_FLAG_TESTS})
 endforeach()
 set(CMAKE_C_FLAGS "${ADDED_CMAKE_C_FLAGS} ${CMAKE_C_FLAGS}")
 
-foreach(THIS_FLAG ${CPP_FLAG_TESTS})
+foreach(THIS_FLAG ${CXX_FLAG_TESTS})
 	string( REGEX REPLACE "[^a-zA-Z0-9_]+" "_" F ${THIS_FLAG} )
 	set(${F} ${THIS_FLAG})
-	set(V CPP_${F}_VALID)
+	set(V CXX_${F}_VALID)
 	message(STATUS "Checking for c++-compiler flag: ${THIS_FLAG}")
 	check_cxx_compiler_flag("${ADDED_CMAKE_CXX_FLAGS} ${${F}}" ${V})
 	if (${${V}})
@@ -965,6 +965,9 @@ if (Qt5Widgets_FOUND)
 		set (QT_LIBRARIES ${QT_LIBRARIES} ${Qt5WinExtras_LIBRARIES})
 		# set(QT_WINEXTRAS_LIB 1) # Not needed?
 	endif()
+	if(NOT DEFINED MOC_OPTIONS)
+		set(MOC_OPTIONS --no-notes)
+	endif()
 # If Qt4: QT_LIBRARIES and QT_INCLUDES are not set above. They require extra magic
 elseif(QT_FOUND)
 	include(${QT_USE_FILE})
@@ -978,6 +981,11 @@ elseif(QT_FOUND)
 		message(STATUS "QtMultimedia libs: ${QT_QTMULTIMEDIA_LIBRARY}")
 		# That's the name autofoo uses
 		set(QT_MULTIMEDIA_LIB 1)
+	endif()
+	if(NOT DEFINED MOC_OPTIONS)
+		if(QT_VERSION_MAJOR EQUAL 4 AND QT_VERSION_MINOR GREATER 7)
+			set(MOC_OPTIONS -nn)
+		endif()
 	endif()
 endif()
 
@@ -1010,6 +1018,7 @@ add_subdirectory( caputils )
 add_subdirectory( codecs )
 add_subdirectory( docbook )
 add_subdirectory( epan )
+add_subdirectory( randpkt_core )
 add_subdirectory( tools/lemon )
 add_subdirectory( ui )
 add_subdirectory( wiretap )
@@ -1197,6 +1206,7 @@ set( IN_FILES
 	packaging/macosx/Info.plist.in
 	packaging/macosx/osx-dmg.sh.in
 	packaging/macosx/Wireshark_package.pmdoc/index.xml.in
+	randpkt_core/doxygen.cfg.in
 	ui/doxygen.cfg.in
 	ui/gtk/doxygen.cfg.in
 	ui/qt/doxygen.cfg.in
@@ -1223,6 +1233,7 @@ link_directories(
 	${CMAKE_BINARY_DIR}/caputils
 	${CMAKE_BINARY_DIR}/codecs
 	${CMAKE_BINARY_DIR}/epan
+	${CMAKE_BINARY_DIR}/randpkt_core
 	${CMAKE_BINARY_DIR}/wiretap
 	${CMAKE_BINARY_DIR}/wsutil
 )
@@ -1381,7 +1392,6 @@ set(LIBEPAN_LIBS
 		${SMI_LIBRARIES}
 		${ZLIB_LIBRARIES}
 		${M_LIBRARIES}
-		${SBC_LIBRARIES}
 		${WINSPARKLE_LIBRARIES}
 )
 
@@ -2139,6 +2149,7 @@ endif()
 
 if(BUILD_randpkt)
 	set(randpkt_LIBS
+		randpkt_core
 		wiretap
 		wsutil
 		${M_LIBRARIES}
@@ -2151,7 +2162,6 @@ if(BUILD_randpkt)
 	)
 	set(randpkt_FILES
 		randpkt.c
-		randpkt-core.c
 	)
 	add_executable(randpkt ${randpkt_FILES})
 	set_extra_executable_properties(randpkt "Executables")
@@ -2358,6 +2368,7 @@ if(BUILD_androiddump)
 	endif()
 	set(androiddump_FILES
 		extcap/androiddump.c
+		extcap/extcap-base.c
 	)
 
 	add_executable(androiddump WIN32 ${androiddump_FILES})
@@ -2378,6 +2389,7 @@ if(BUILD_sshdump AND LIBSSH_FOUND)
 	endif()
 	set(sshdump_FILES
 		extcap/sshdump.c
+		extcap/extcap-base.c
 	)
 
 	add_executable(sshdump WIN32 ${sshdump_FILES})
@@ -2391,13 +2403,14 @@ endif()
 
 if(BUILD_randpktdump)
 	set(randpktdump_LIBS
+		randpkt_core
 		wiretap
 		${GLIB2_LIBRARIES}
 		${CMAKE_DL_LIBS}
 	)
 	set(randpktdump_FILES
 		extcap/randpktdump.c
-		randpkt-core.c
+		extcap/extcap-base.c
 	)
 
 	add_executable(randpktdump WIN32 ${randpktdump_FILES})

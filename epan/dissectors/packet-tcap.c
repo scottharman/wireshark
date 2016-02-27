@@ -173,7 +173,6 @@ static gint ett_tcap_Reject = -1;
 static gint ett_tcap_T_invokeIDRej = -1;
 static gint ett_tcap_T_problem = -1;
 static gint ett_tcap_OPERATION = -1;
-static gint ett_tcap_ERROR = -1;
 static gint ett_tcap_ErrorCode = -1;
 static gint ett_tcap_UniDialoguePDU = -1;
 static gint ett_tcap_AUDT_apdu_U = -1;
@@ -241,32 +240,32 @@ static GHashTable* ansi_sub_dissectors = NULL;
 static GHashTable* itu_sub_dissectors = NULL;
 
 extern void add_ansi_tcap_subdissector(guint32 ssn, dissector_handle_t dissector) {
-    g_hash_table_insert(ansi_sub_dissectors,GUINT_TO_POINTER(ssn),dissector);
-    dissector_add_uint("sccp.ssn",ssn,tcap_handle);
+  g_hash_table_insert(ansi_sub_dissectors,GUINT_TO_POINTER(ssn),dissector);
+  dissector_add_uint("sccp.ssn",ssn,tcap_handle);
 }
 
 extern void add_itu_tcap_subdissector(guint32 ssn, dissector_handle_t dissector) {
-    g_hash_table_insert(itu_sub_dissectors,GUINT_TO_POINTER(ssn),dissector);
-    dissector_add_uint("sccp.ssn",ssn,tcap_handle);
+  g_hash_table_insert(itu_sub_dissectors,GUINT_TO_POINTER(ssn),dissector);
+  dissector_add_uint("sccp.ssn",ssn,tcap_handle);
 }
 
 extern void delete_ansi_tcap_subdissector(guint32 ssn, dissector_handle_t dissector _U_) {
-    g_hash_table_remove(ansi_sub_dissectors,GUINT_TO_POINTER(ssn));
-    if (!get_itu_tcap_subdissector(ssn))
+  g_hash_table_remove(ansi_sub_dissectors,GUINT_TO_POINTER(ssn));
+  if (!get_itu_tcap_subdissector(ssn))
       dissector_delete_uint("sccp.ssn",ssn,tcap_handle);
 }
 extern void delete_itu_tcap_subdissector(guint32 ssn, dissector_handle_t dissector _U_) {
-    g_hash_table_remove(itu_sub_dissectors,GUINT_TO_POINTER(ssn));
-    if (!get_ansi_tcap_subdissector(ssn))
-      dissector_delete_uint("sccp.ssn", ssn,tcap_handle);
+  g_hash_table_remove(itu_sub_dissectors,GUINT_TO_POINTER(ssn));
+  if (!get_ansi_tcap_subdissector(ssn))
+    dissector_delete_uint("sccp.ssn", ssn,tcap_handle);
 }
 
 dissector_handle_t get_ansi_tcap_subdissector(guint32 ssn) {
-    return (dissector_handle_t)g_hash_table_lookup(ansi_sub_dissectors,GUINT_TO_POINTER(ssn));
+  return (dissector_handle_t)g_hash_table_lookup(ansi_sub_dissectors,GUINT_TO_POINTER(ssn));
 }
 
 dissector_handle_t get_itu_tcap_subdissector(guint32 ssn) {
-    return (dissector_handle_t)g_hash_table_lookup(itu_sub_dissectors,GUINT_TO_POINTER(ssn));
+  return (dissector_handle_t)g_hash_table_lookup(itu_sub_dissectors,GUINT_TO_POINTER(ssn));
 }
 
 
@@ -666,33 +665,35 @@ static const ber_choice_t Component_choice[] = {
 static int
 dissect_tcap_Component(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
 #line 82 "../../asn1/tcap/tcap.cnf"
-tvbuff_t	*next_tvb;
-gint8 ber_class;
-gboolean pc;
-gint tag;
-guint32 len, comp_offset;
-gint ind_field;
+  tvbuff_t *next_tvb;
+  gint8 ber_class;
+  gboolean pc;
+  gint tag;
+  guint32 len, comp_offset;
+  volatile guint32 _offset;
+  gint ind_field;
 
-comp_offset = dissect_ber_identifier(actx->pinfo, tree, tvb, offset, &ber_class, &pc, &tag);
-comp_offset = dissect_ber_length(actx->pinfo, tree, tvb, comp_offset, &len, &ind_field);
-/* we can believe the length now */
-next_tvb = tvb_new_subset_length(tvb, offset, len+comp_offset-offset);
+  comp_offset = dissect_ber_identifier(actx->pinfo, tree, tvb, offset, &ber_class, &pc, &tag);
+  comp_offset = dissect_ber_length(actx->pinfo, tree, tvb, comp_offset, &len, &ind_field);
+  /* we can believe the length now */
+  next_tvb = tvb_new_subset_length(tvb, offset, len+comp_offset-offset);
 
-if (!next_tvb)
-  return comp_offset;
+  if (!next_tvb)
+    return comp_offset;
 
-TRY {
-  offset = dissect_ber_choice(actx, tree, tvb, offset,
+  _offset = offset;
+  TRY {
+    _offset = dissect_ber_choice(actx, tree, tvb, _offset,
                                  Component_choice, hf_index, ett_tcap_Component,
                                  NULL);
+  }
+  CATCH_NONFATAL_ERRORS {
+    show_exception(tvb, actx->pinfo, tree, EXCEPT_CODE, GET_MESSAGE);
+  }
+  ENDTRY;
+  offset = _offset;
 
-}
-CATCH_NONFATAL_ERRORS {
-  show_exception(tvb, actx->pinfo, tree, EXCEPT_CODE, GET_MESSAGE);
-}
-ENDTRY;
-
- dissect_tcap_ITU_ComponentPDU(implicit_tag, next_tvb, 0, actx, tcap_top_tree, hf_index);
+  dissect_tcap_ITU_ComponentPDU(implicit_tag, next_tvb, 0, actx, tcap_top_tree, hf_index);
 
 /* return comp_offset+len; or return offset (will be automatically added) */
 
@@ -753,43 +754,49 @@ dissect_tcap_OCTET_STRING_SIZE_1_4(gboolean implicit_tag _U_, tvbuff_t *tvb _U_,
 
 static int
 dissect_tcap_OrigTransactionID(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 126 "../../asn1/tcap/tcap.cnf"
-tvbuff_t *parameter_tvb;
-guint8 len, i;
-proto_tree *subtree;
-subtree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_otid, NULL, "Source Transaction ID");
+#line 131 "../../asn1/tcap/tcap.cnf"
+  tvbuff_t *parameter_tvb;
+  guint8 len, i;
+  proto_tree *subtree;
+  int saved_offset;
 
-dissect_ber_octet_string(implicit_tag, actx, subtree, tvb, offset, hf_tcap_tid, NULL);
-PROTO_ITEM_SET_HIDDEN(actx->created_item);
-offset = dissect_ber_octet_string(implicit_tag, actx, subtree, tvb, offset, hf_tcap_otid,
+  hf_index = hf_tcap_tid;
+  saved_offset = offset;
+  offset = dissect_ber_tagged_type(implicit_tag, actx, tree, tvb, offset,
+                                      hf_index, BER_CLASS_APP, 8, TRUE, dissect_tcap_OCTET_STRING_SIZE_1_4);
+
+  PROTO_ITEM_SET_HIDDEN(actx->created_item);
+  offset = saved_offset;
+
+  subtree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_otid, NULL, "Source Transaction ID");
+  offset = dissect_ber_octet_string(implicit_tag, actx, subtree, tvb, offset, hf_tcap_otid,
                                     &parameter_tvb);
 
-if (parameter_tvb){
-	len = tvb_reported_length_remaining(parameter_tvb, 0);
-	switch(len) {
-	case 1:
-		gp_tcapsrt_info->src_tid=tvb_get_guint8(parameter_tvb, 0);
-		break;
-	case 2:
-		gp_tcapsrt_info->src_tid=tvb_get_ntohs(parameter_tvb, 0);
-		break;
-	case 4:
-		gp_tcapsrt_info->src_tid=tvb_get_ntohl(parameter_tvb, 0);
-		break;
-	default:
-		gp_tcapsrt_info->src_tid=0;
-		break;
-	}
+  if (parameter_tvb) {
+    len = tvb_reported_length_remaining(parameter_tvb, 0);
+    switch(len) {
+    case 1:
+      gp_tcapsrt_info->src_tid=tvb_get_guint8(parameter_tvb, 0);
+      break;
+    case 2:
+      gp_tcapsrt_info->src_tid=tvb_get_ntohs(parameter_tvb, 0);
+      break;
+    case 4:
+      gp_tcapsrt_info->src_tid=tvb_get_ntohl(parameter_tvb, 0);
+      break;
+    default:
+      gp_tcapsrt_info->src_tid=0;
+      break;
+    }
 
-	if (len){
-		col_append_str(actx->pinfo->cinfo, COL_INFO, "otid(");
-		for(i=0;i<len;i++)
-			col_append_fstr(actx->pinfo->cinfo, COL_INFO, "%02x",tvb_get_guint8(parameter_tvb,i));
-		col_append_str(actx->pinfo->cinfo, COL_INFO, ") ");
-	}
-
-}
-
+    if (len) {
+      col_append_str(actx->pinfo->cinfo, COL_INFO, "otid(");
+      for (i = 0; i < len; i++) {
+        col_append_fstr(actx->pinfo->cinfo, COL_INFO, "%02x",tvb_get_guint8(parameter_tvb,i));
+      }
+      col_append_str(actx->pinfo->cinfo, COL_INFO, ") ");
+    }
+  }
 
 
 
@@ -806,7 +813,7 @@ static const ber_sequence_t Begin_sequence[] = {
 
 static int
 dissect_tcap_Begin(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 200 "../../asn1/tcap/tcap.cnf"
+#line 215 "../../asn1/tcap/tcap.cnf"
 gp_tcapsrt_info->ope=TC_BEGIN;
 
 /*  Do not change col_add_str() to col_append_str() here: we _want_ this call
@@ -816,7 +823,7 @@ gp_tcapsrt_info->ope=TC_BEGIN;
  *  If there's something there that should not be overwritten, whoever
  *  put that info there should call col_set_fence() to protect it.
  */
-	col_set_str(actx->pinfo->cinfo, COL_INFO, "Begin ");
+  col_set_str(actx->pinfo->cinfo, COL_INFO, "Begin ");
 
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Begin_sequence, hf_index, ett_tcap_Begin);
@@ -828,41 +835,49 @@ gp_tcapsrt_info->ope=TC_BEGIN;
 
 static int
 dissect_tcap_DestTransactionID(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 165 "../../asn1/tcap/tcap.cnf"
-tvbuff_t *parameter_tvb;
-guint8 len , i;
-proto_tree *subtree;
-subtree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_dtid, NULL, "Destination Transaction ID");
+#line 174 "../../asn1/tcap/tcap.cnf"
+  tvbuff_t *parameter_tvb;
+  guint8 len , i;
+  proto_tree *subtree;
+  int saved_offset;
 
-dissect_ber_octet_string(implicit_tag, actx, subtree, tvb, offset, hf_tcap_tid, NULL);
-PROTO_ITEM_SET_HIDDEN(actx->created_item);
-offset = dissect_ber_octet_string(implicit_tag, actx, subtree, tvb, offset, hf_tcap_dtid,
+  hf_index = hf_tcap_tid;
+  saved_offset = offset;
+  offset = dissect_ber_tagged_type(implicit_tag, actx, tree, tvb, offset,
+                                      hf_index, BER_CLASS_APP, 9, TRUE, dissect_tcap_OCTET_STRING_SIZE_1_4);
+
+  PROTO_ITEM_SET_HIDDEN(actx->created_item);
+  offset = saved_offset;
+
+  subtree = proto_tree_add_subtree(tree, tvb, offset, -1, ett_dtid, NULL, "Destination Transaction ID");
+  offset = dissect_ber_octet_string(implicit_tag, actx, subtree, tvb, offset, hf_tcap_dtid,
                                     &parameter_tvb);
 
-if (parameter_tvb){
-	len = tvb_reported_length_remaining(parameter_tvb, 0);
-	switch(len) {
-	case 1:
-		gp_tcapsrt_info->dst_tid=tvb_get_guint8(parameter_tvb, 0);
-		break;
-	case 2:
-		gp_tcapsrt_info->dst_tid=tvb_get_ntohs(parameter_tvb, 0);
-		break;
-	case 4:
-		gp_tcapsrt_info->dst_tid=tvb_get_ntohl(parameter_tvb, 0);
-		break;
-	default:
-		gp_tcapsrt_info->dst_tid=0;
-		break;
-	}
+  if (parameter_tvb) {
+    len = tvb_reported_length_remaining(parameter_tvb, 0);
+    switch(len) {
+    case 1:
+      gp_tcapsrt_info->dst_tid=tvb_get_guint8(parameter_tvb, 0);
+      break;
+    case 2:
+      gp_tcapsrt_info->dst_tid=tvb_get_ntohs(parameter_tvb, 0);
+      break;
+    case 4:
+      gp_tcapsrt_info->dst_tid=tvb_get_ntohl(parameter_tvb, 0);
+      break;
+    default:
+      gp_tcapsrt_info->dst_tid=0;
+      break;
+    }
 
-	if (len){
-		col_append_str(actx->pinfo->cinfo, COL_INFO, "dtid(");
-		for(i=0;i<len;i++)
-			col_append_fstr(actx->pinfo->cinfo, COL_INFO, "%02x",tvb_get_guint8(parameter_tvb,i));
-		col_append_str(actx->pinfo->cinfo, COL_INFO, ") ");
-	}
-}
+    if (len) {
+      col_append_str(actx->pinfo->cinfo, COL_INFO, "dtid(");
+      for(i = 0; i < len; i++) {
+        col_append_fstr(actx->pinfo->cinfo, COL_INFO, "%02x",tvb_get_guint8(parameter_tvb,i));
+      }
+      col_append_str(actx->pinfo->cinfo, COL_INFO, ") ");
+    }
+  }
 
 
   return offset;
@@ -878,10 +893,10 @@ static const ber_sequence_t End_sequence[] = {
 
 static int
 dissect_tcap_End(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 214 "../../asn1/tcap/tcap.cnf"
+#line 229 "../../asn1/tcap/tcap.cnf"
 gp_tcapsrt_info->ope=TC_END;
 
-	col_set_str(actx->pinfo->cinfo, COL_INFO, "End ");
+  col_set_str(actx->pinfo->cinfo, COL_INFO, "End ");
 
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    End_sequence, hf_index, ett_tcap_End);
@@ -900,10 +915,10 @@ static const ber_sequence_t Continue_sequence[] = {
 
 static int
 dissect_tcap_Continue(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 221 "../../asn1/tcap/tcap.cnf"
+#line 236 "../../asn1/tcap/tcap.cnf"
 gp_tcapsrt_info->ope=TC_CONT;
 
-	col_set_str(actx->pinfo->cinfo, COL_INFO, "Continue ");
+  col_set_str(actx->pinfo->cinfo, COL_INFO, "Continue ");
 
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Continue_sequence, hf_index, ett_tcap_Continue);
@@ -971,10 +986,10 @@ static const ber_sequence_t Abort_sequence[] = {
 
 static int
 dissect_tcap_Abort(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 228 "../../asn1/tcap/tcap.cnf"
+#line 243 "../../asn1/tcap/tcap.cnf"
 gp_tcapsrt_info->ope=TC_ABORT;
 
-	col_set_str(actx->pinfo->cinfo, COL_INFO, "Abort ");
+  col_set_str(actx->pinfo->cinfo, COL_INFO, "Abort ");
 
   offset = dissect_ber_sequence(implicit_tag, actx, tree, tvb, offset,
                                    Abort_sequence, hf_index, ett_tcap_Abort);
@@ -1002,22 +1017,6 @@ dissect_tcap_TCMessage(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset 
 }
 
 
-static const ber_choice_t ERROR_choice[] = {
-  {   0, &hf_tcap_localValue     , BER_CLASS_UNI, BER_UNI_TAG_INTEGER, BER_FLAGS_NOOWNTAG, dissect_tcap_INTEGER },
-  {   1, &hf_tcap_globalValue    , BER_CLASS_UNI, BER_UNI_TAG_OID, BER_FLAGS_NOOWNTAG, dissect_tcap_OBJECT_IDENTIFIER },
-  { 0, NULL, 0, 0, 0, NULL }
-};
-
-static int
-dissect_tcap_ERROR(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-  offset = dissect_ber_choice(actx, tree, tvb, offset,
-                                 ERROR_choice, hf_index, ett_tcap_ERROR,
-                                 NULL);
-
-  return offset;
-}
-
-
 static const asn_namedbit AUDT_protocol_version_bits[] = {
   {  0, &hf_tcap_AUDT_protocol_version_version1, -1, -1, "version1", NULL },
   { 0, NULL, 0, 0, NULL, NULL }
@@ -1036,11 +1035,11 @@ dissect_tcap_AUDT_protocol_version(gboolean implicit_tag _U_, tvbuff_t *tvb _U_,
 
 static int
 dissect_tcap_AUDT_application_context_name(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 111 "../../asn1/tcap/tcap.cnf"
+#line 116 "../../asn1/tcap/tcap.cnf"
   offset = dissect_ber_object_identifier_str(implicit_tag, actx, tree, tvb, offset, hf_index, &cur_oid);
 
-	tcap_private.oid= (const void*) cur_oid;
-	tcap_private.acv=TRUE;
+  tcap_private.oid= (const void*) cur_oid;
+  tcap_private.acv=TRUE;
 
 
   return offset;
@@ -1133,11 +1132,11 @@ dissect_tcap_AARQ_protocol_version(gboolean implicit_tag _U_, tvbuff_t *tvb _U_,
 
 static int
 dissect_tcap_AARQ_application_context_name(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 116 "../../asn1/tcap/tcap.cnf"
+#line 121 "../../asn1/tcap/tcap.cnf"
   offset = dissect_ber_object_identifier_str(implicit_tag, actx, tree, tvb, offset, hf_index, &cur_oid);
 
-	tcap_private.oid= (const void*) cur_oid;
-	tcap_private.acv=TRUE;
+  tcap_private.oid= (const void*) cur_oid;
+  tcap_private.acv=TRUE;
 
 
   return offset;
@@ -1201,11 +1200,11 @@ dissect_tcap_AARE_protocol_version(gboolean implicit_tag _U_, tvbuff_t *tvb _U_,
 
 static int
 dissect_tcap_AARE_application_context_name(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
-#line 121 "../../asn1/tcap/tcap.cnf"
+#line 126 "../../asn1/tcap/tcap.cnf"
   offset = dissect_ber_object_identifier_str(implicit_tag, actx, tree, tvb, offset, hf_index, &cur_oid);
 
-	tcap_private.oid= (const void*) cur_oid;
-	tcap_private.acv=TRUE;
+  tcap_private.oid= (const void*) cur_oid;
+  tcap_private.acv=TRUE;
 
 
   return offset;
@@ -3238,8 +3237,8 @@ const value_string tcap_component_type_str[] = {
 static int
 dissect_tcap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* data _U_)
 {
-  proto_item		*item=NULL;
-  proto_tree		*tree=NULL;
+  proto_item *item=NULL;
+  proto_tree *tree=NULL;
 
   struct tcaphash_context_t * p_tcap_context;
   dissector_handle_t subdissector_handle;
@@ -3249,14 +3248,14 @@ dissect_tcap(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* d
   gint tag;
 
   /* Check if ANSI TCAP and call the ANSI TCAP dissector if that's the case
-   * PackageType ::= CHOICE { unidirectional			[PRIVATE 1] IMPLICIT UniTransactionPDU,
-   * 						 queryWithPerm				[PRIVATE 2] IMPLICIT TransactionPDU,
-   * 						 queryWithoutPerm			[PRIVATE 3] IMPLICIT TransactionPDU,
-   * 						 response					[PRIVATE 4] IMPLICIT TransactionPDU,
-   * 						 conversationWithPerm		[PRIVATE 5] IMPLICIT TransactionPDU,
-   * 						 conversationWithoutPerm	[PRIVATE 6] IMPLICIT TransactionPDU,
-   * 						 abort						[PRIVATE 22] IMPLICIT Abort
-   * 						 }
+   * PackageType ::= CHOICE { unidirectional            [PRIVATE 1] IMPLICIT UniTransactionPDU,
+   *                          queryWithPerm             [PRIVATE 2] IMPLICIT TransactionPDU,
+   *                          queryWithoutPerm          [PRIVATE 3] IMPLICIT TransactionPDU,
+   *                          response                  [PRIVATE 4] IMPLICIT TransactionPDU,
+   *                          conversationWithPerm      [PRIVATE 5] IMPLICIT TransactionPDU,
+   *                          conversationWithoutPerm   [PRIVATE 6] IMPLICIT TransactionPDU,
+   *                          abort                     [PRIVATE 22] IMPLICIT Abort
+   *                          }
    *
    *
    */
@@ -3716,7 +3715,6 @@ proto_register_tcap(void)
     &ett_tcap_T_invokeIDRej,
     &ett_tcap_T_problem,
     &ett_tcap_OPERATION,
-    &ett_tcap_ERROR,
     &ett_tcap_ErrorCode,
     &ett_tcap_UniDialoguePDU,
     &ett_tcap_AUDT_apdu_U,
@@ -4023,11 +4021,11 @@ dissect_tcap_ITU_ComponentPDU(gboolean implicit_tag _U_, tvbuff_t *tvb, int offs
           = get_itu_tcap_subdissector(actx->pinfo->match_uint))) {
           /* Found according to SSN */
           is_subdissector=TRUE;
-	} else {
+        } else {
           /* Nothing found, take the Data handler */
           subdissector_handle = data_handle;
           is_subdissector=TRUE;
-	} /* SSN */
+        } /* SSN */
       } /* ACN */
     } else {
       /* There is no A.C.N for this transaction, so search in the SSN table */
@@ -4066,3 +4064,16 @@ call_tcap_dissector(dissector_handle_t handle, tvbuff_t* tvb, packet_info* pinfo
 
   requested_subdissector_handle = NULL;
 }
+
+/*
+ * Editor modelines
+ *
+ * Local Variables:
+ * c-basic-offset: 2
+ * tab-width: 8
+ * indent-tabs-mode: nil
+ * End:
+ *
+ * ex: set shiftwidth=2 tabstop=8 expandtab:
+ * :indentSize=2:tabSize=8:noTabs=true:
+ */

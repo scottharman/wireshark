@@ -67,6 +67,8 @@
 #include <wsutil/report_err.h>
 #include <wsutil/ws_diag_control.h>
 #include <wsutil/ws_version_info.h>
+#include <wiretap/wtap_opttypes.h>
+#include <wiretap/pcapng.h>
 
 #include "globals.h"
 #include <epan/timestamp.h>
@@ -85,6 +87,7 @@
 #endif
 #include "ui/util.h"
 #include "ui/ui_util.h"
+#include "ui/decode_as_utils.h"
 #include "ui/cli/tshark-tap.h"
 #include "register.h"
 #include "filter_files.h"
@@ -1296,6 +1299,9 @@ main(int argc, char *argv[])
     }
     return 0;
   }
+
+  /* load the decode as entries of this profile */
+  load_decode_as_entries();
 
   tshark_debug("tshark reading preferences");
 
@@ -3166,12 +3172,13 @@ load_cap_file(capture_file *cf, char *save_file, int out_file_type,
   char        *save_file_string = NULL;
   gboolean     filtering_tap_listeners;
   guint        tap_flags;
-  wtapng_section_t            *shb_hdr = NULL;
+  wtap_optionblock_t           shb_hdr = NULL;
   wtapng_iface_descriptions_t *idb_inf = NULL;
-  wtapng_name_res_t           *nrb_hdr = NULL;
+  wtap_optionblock_t           nrb_hdr = NULL;
   struct wtap_pkthdr phdr;
   Buffer       buf;
   epan_dissect_t *edt = NULL;
+  char                        *shb_user_appl;
 
   wtap_phdr_init(&phdr);
 
@@ -3201,9 +3208,12 @@ load_cap_file(capture_file *cf, char *save_file, int out_file_type,
     nrb_hdr = wtap_file_get_nrb_for_new_file(cf->wth);
 
     /* If we don't have an application name add Tshark */
-    if (shb_hdr->shb_user_appl == NULL) {
-        /* this is free'd by wtap_free_shb() later */
-        shb_hdr->shb_user_appl = g_strdup_printf("TShark (Wireshark) %s", get_ws_vcs_version_info());
+    wtap_optionblock_get_option_string(shb_hdr, OPT_SHB_USERAPPL, &shb_user_appl);
+    if (shb_user_appl == NULL) {
+        /* this is free'd by wtap_optionblock_free() later */
+        shb_user_appl = g_strdup_printf("TShark (Wireshark) %s", get_ws_vcs_version_info());
+        wtap_optionblock_set_option_string(shb_hdr, OPT_SHB_USERAPPL, shb_user_appl);
+        g_free(shb_user_appl);
     }
 
     if (linktype != WTAP_ENCAP_PER_PACKET &&
@@ -3444,8 +3454,8 @@ load_cap_file(capture_file *cf, char *save_file, int out_file_type,
                 break;
               }
               wtap_dump_close(pdh, &err);
-              wtap_free_shb(shb_hdr);
-              wtap_free_nrb(nrb_hdr);
+              wtap_optionblock_free(shb_hdr);
+              wtap_optionblock_free(nrb_hdr);
               exit(2);
             }
           }
@@ -3559,8 +3569,8 @@ load_cap_file(capture_file *cf, char *save_file, int out_file_type,
               break;
             }
             wtap_dump_close(pdh, &err);
-            wtap_free_shb(shb_hdr);
-            wtap_free_nrb(nrb_hdr);
+            wtap_optionblock_free(shb_hdr);
+            wtap_optionblock_free(nrb_hdr);
             exit(2);
           }
         }
@@ -3676,8 +3686,8 @@ out:
   cf->wth = NULL;
 
   g_free(save_file_string);
-  wtap_free_shb(shb_hdr);
-  wtap_free_nrb(nrb_hdr);
+  wtap_optionblock_free(shb_hdr);
+  wtap_optionblock_free(nrb_hdr);
 
   return err;
 }

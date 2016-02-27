@@ -880,7 +880,7 @@ proto_register_prefix(const char *prefix, prefix_initializer_t pi ) {
 		prefixes = g_hash_table_new(prefix_hash, prefix_equal);
 	}
 
-	g_hash_table_insert(prefixes, (gpointer)prefix, pi);
+	g_hash_table_insert(prefixes, (gpointer)prefix, (gpointer)pi);
 }
 
 /* helper to call all prefix initializers */
@@ -8037,7 +8037,7 @@ typedef struct {
 } offset_search_t;
 
 static gboolean
-check_for_offset(proto_node *node, const gpointer data)
+check_for_offset(proto_node *node, gpointer data)
 {
 	field_info	*fi        = PNODE_FINFO(node);
 	offset_search_t	*offsearch = (offset_search_t *)data;
@@ -8078,7 +8078,7 @@ proto_find_field_from_offset(proto_tree *tree, guint offset, tvbuff_t *tvb)
 
 
 static gboolean
-check_for_undecoded(proto_node *node, const gpointer data)
+check_for_undecoded(proto_node *node, gpointer data)
 {
 	field_info *fi = PNODE_FINFO(node);
 	gchar* decoded = (gchar*)data;

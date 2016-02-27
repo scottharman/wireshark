@@ -176,7 +176,7 @@ static gint ett_gsm_map_GeographicalInformation = -1;
 static gint ett_gsm_map_apn_str = -1;
 static gint ett_gsm_map_LocationNumber = -1;
 static gint ett_gsm_map_ericsson_locationInformation = -1;
-static gint ett_gsm_map_extention_data = -1;
+static gint ett_gsm_map_extension_data = -1;
 static gint ett_gsm_map_tbcd_digits = -1;
 static gint ett_gsm_map_ussd_string = -1;
 
@@ -3082,7 +3082,7 @@ void proto_register_gsm_map(void) {
     &ett_gsm_map_apn_str,
     &ett_gsm_map_LocationNumber,
     &ett_gsm_map_ericsson_locationInformation,
-    &ett_gsm_map_extention_data,
+    &ett_gsm_map_extension_data,
     &ett_gsm_map_tbcd_digits,
     &ett_gsm_map_ussd_string,
 
@@ -3142,7 +3142,7 @@ void proto_register_gsm_map(void) {
 
   gsm_map_tap = register_tap("gsm_map");
 
-#include "packet-gsm_map-dis-tab.c" */
+#include "packet-gsm_map-dis-tab.c"
   oid_add_from_string("ericsson-gsm-Map-Ext","1.2.826.0.1249.58.1.0" );
   oid_add_from_string("accessTypeNotAllowed-id","1.3.12.2.1107.3.66.1.2");
   /*oid_add_from_string("map-ac networkLocUp(1) version3(3)","0.4.0.0.1.0.1.3" );

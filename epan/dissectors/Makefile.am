@@ -21,13 +21,15 @@
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
 
-AM_CPPFLAGS += -I$(top_srcdir)/epan $(LIBGNUTLS_CFLAGS) $(LIBGCRYPT_CFLAGS)
+AM_CPPFLAGS = $(INCLUDEDIRS) -I$(top_srcdir)/epan $(WS_CPPFLAGS) \
+	$(GLIB_CFLAGS) $(LIBGNUTLS_CFLAGS) $(LIBGCRYPT_CFLAGS)
 
 noinst_LTLIBRARIES = libdirtydissectors.la libfiledissectors.la libdissectors.la
 
 libdirtydissectors_la_SOURCES = \
 	$(DIRTY_ASN1_DISSECTOR_SRC) \
 	$(DIRTY_CORBA_IDL_DISSECTOR_SRC)
+
 libdirtydissectors_la_CFLAGS = $(GENERATED_CFLAGS)
 
 libfiledissectors_la_SOURCES = \
@@ -54,7 +56,7 @@ EXTRA_DIST = \
 	x11-fields
 
 packet-ncp2222.c : $(top_srcdir)/tools/ncp2222.py
-	$(PYTHON) $(top_srcdir)/tools/ncp2222.py -o $@
+	$(AM_V_python)$(PYTHON) $(top_srcdir)/tools/ncp2222.py -o $@
 
 # Target to rebuild the X11 dissector header files.
 # See README.X11 before using this--it requires the xcb and mesa source.

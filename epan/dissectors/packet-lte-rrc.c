@@ -5618,7 +5618,6 @@ static const fragment_items lte_rrc_sib12_frag_items = {
 /* Forward declarations */
 static int dissect_DL_DCCH_Message_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_);
 static int dissect_UECapabilityInformation_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_);
-int dissect_lte_rrc_UE_EUTRA_Capability_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_);
 
 static const true_false_string lte_rrc_eutra_cap_feat_group_ind_1_val = {
   "Intra-subframe freq hopping for PUSCH scheduled by UL grant; DCI format 3a; Aperiodic CQI/PMI/RI report on PUSCH: Mode 2-0 & 2-2 - Supported",
@@ -32114,16 +32113,15 @@ dissect_lte_rrc_T_warningMessageSegmentNumber(tvbuff_t *tvb _U_, int offset _U_,
 static int
 dissect_lte_rrc_T_warningMessageSegment(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   tvbuff_t *warning_msg_seg_tvb = NULL;
-  gpointer p_dcs;
   offset = dissect_per_octet_string(tvb, offset, actx, tree, hf_index,
                                        NO_BOUND, NO_BOUND, FALSE, &warning_msg_seg_tvb);
 
 
 
-  p_dcs = g_hash_table_lookup(lte_rrc_etws_cmas_dcs_hash, GUINT_TO_POINTER((guint)private_data_get_message_identifier(actx)));
-  if (warning_msg_seg_tvb && p_dcs) {
+  if (warning_msg_seg_tvb) {
     proto_tree *subtree;
     tvbuff_t *frag_tvb;
+    gpointer p_dcs;
     fragment_head *frag_data = fragment_add_seq_check(&lte_rrc_sib11_reassembly_table, warning_msg_seg_tvb, 0, actx->pinfo,
                                                       private_data_get_message_identifier(actx), NULL,
                                                       private_data_get_warning_message_segment_number(actx),
@@ -32132,7 +32130,8 @@ dissect_lte_rrc_T_warningMessageSegment(tvbuff_t *tvb _U_, int offset _U_, asn1_
     subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_warningMessageSegment);
     frag_tvb = process_reassembled_data(warning_msg_seg_tvb, 0, actx->pinfo, "Reassembled SIB11 warning message",
                                         frag_data, &lte_rrc_sib11_frag_items, NULL, subtree);
-    if (frag_tvb) {
+    p_dcs = g_hash_table_lookup(lte_rrc_etws_cmas_dcs_hash, GUINT_TO_POINTER((guint)private_data_get_message_identifier(actx)));
+    if (frag_tvb && p_dcs) {
       dissect_lte_rrc_warningMessageSegment(frag_tvb, subtree, actx->pinfo, GPOINTER_TO_UINT(p_dcs));
     }
   }
@@ -32265,16 +32264,15 @@ dissect_lte_rrc_T_warningMessageSegmentNumber_r9(tvbuff_t *tvb _U_, int offset _
 static int
 dissect_lte_rrc_T_warningMessageSegment_r9(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_) {
   tvbuff_t *warning_msg_seg_tvb = NULL;
-  gpointer p_dcs;
   offset = dissect_per_octet_string(tvb, offset, actx, tree, hf_index,
                                        NO_BOUND, NO_BOUND, FALSE, &warning_msg_seg_tvb);
 
 
 
-  p_dcs = g_hash_table_lookup(lte_rrc_etws_cmas_dcs_hash, GUINT_TO_POINTER((guint)private_data_get_message_identifier(actx)));
-  if (warning_msg_seg_tvb && p_dcs) {
+  if (warning_msg_seg_tvb) {
     proto_tree *subtree;
     tvbuff_t *frag_tvb;
+    gpointer p_dcs;
     fragment_head *frag_data = fragment_add_seq_check(&lte_rrc_sib12_reassembly_table, warning_msg_seg_tvb, 0, actx->pinfo,
                                                       private_data_get_message_identifier(actx), NULL,
                                                       private_data_get_warning_message_segment_number(actx),
@@ -32283,7 +32281,8 @@ dissect_lte_rrc_T_warningMessageSegment_r9(tvbuff_t *tvb _U_, int offset _U_, as
     subtree = proto_item_add_subtree(actx->created_item, ett_lte_rrc_warningMessageSegment);
     frag_tvb = process_reassembled_data(warning_msg_seg_tvb, 0, actx->pinfo, "Reassembled SIB12 warning message",
                                         frag_data, &lte_rrc_sib12_frag_items, NULL, subtree);
-    if (frag_tvb) {
+    p_dcs = g_hash_table_lookup(lte_rrc_etws_cmas_dcs_hash, GUINT_TO_POINTER((guint)private_data_get_message_identifier(actx)));
+    if (frag_tvb && p_dcs) {
       dissect_lte_rrc_warningMessageSegment(frag_tvb, subtree, actx->pinfo, GPOINTER_TO_UINT(p_dcs));
     }
   }
@@ -41153,6 +41152,7 @@ dissect_lte_rrc_T_gnss_TOD_msec_r10(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_
     asn1_ctx_t asn1_ctx;
     asn1_ctx_init(&asn1_ctx, ASN1_ENC_PER, FALSE, actx->pinfo);
     dissect_per_constrained_integer(gnss_tod_msec_tvb, 0, &asn1_ctx, tree, hf_index, 0U, 3599999U, NULL, FALSE);
+    proto_item_append_text(actx->created_item, "ms");
   }
 
 
@@ -53424,7 +53424,7 @@ static int dissect_UE_EUTRA_Capability_v9a0_IEs_PDU(tvbuff_t *tvb _U_, packet_in
 
 
 /*--- End of included file: packet-lte-rrc-fn.c ---*/
-#line 2764 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
+#line 2763 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
 
 static int
 dissect_lte_rrc_DL_CCCH(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
@@ -67482,7 +67482,7 @@ void proto_register_lte_rrc(void) {
         "BIT_STRING_SIZE_19", HFILL }},
 
 /*--- End of included file: packet-lte-rrc-hfarr.c ---*/
-#line 2965 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
+#line 2964 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
 
     { &hf_lte_rrc_eutra_cap_feat_group_ind_1,
       { "Indicator 1", "lte-rrc.eutra_cap_feat_group_ind_1",
@@ -69859,7 +69859,7 @@ void proto_register_lte_rrc(void) {
     &ett_lte_rrc_MasterInformationBlock_SL,
 
 /*--- End of included file: packet-lte-rrc-ettarr.c ---*/
-#line 3684 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
+#line 3683 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
 
     &ett_lte_rrc_featureGroupIndicators,
     &ett_lte_rrc_featureGroupIndRel9Add,
@@ -69942,7 +69942,7 @@ void proto_register_lte_rrc(void) {
 
 
 /*--- End of included file: packet-lte-rrc-dis-reg.c ---*/
-#line 3749 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
+#line 3748 "../../asn1/lte-rrc/packet-lte-rrc-template.c"
 
   register_init_routine(&lte_rrc_init_protocol);
   register_cleanup_routine(&lte_rrc_cleanup_protocol);

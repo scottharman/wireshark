@@ -27,9 +27,9 @@ AM_DISTCHECK_CONFIGURE_FLAGS=@GUI_CONFIGURE_FLAGS@
 ACLOCAL_AMFLAGS = `./aclocal-flags`
 
 # Common headers
-AM_CPPFLAGS += -I$(top_srcdir)/wiretap $(LIBGNUTLS_CFLAGS) \
-	$(LIBGCRYPT_CFLAGS) $(LIBSMI_CFLAGS) $(LUA_CFLAGS) $(SBC_CFLAGS) \
-	$(KRB5_CFLAGS)
+COMMONCPPFLAGS =
+
+AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(COMMONCPPFLAGS)
 
 bin_PROGRAMS = \
 	@wireshark_bin@		\
@@ -45,14 +45,11 @@ bin_PROGRAMS = \
 	@dumpcap_bin@		\
 	@reordercap_bin@	\
 	@rawshark_bin@		\
-	@androiddump_bin@	\
-	@sshdump_bin@		\
-	@randpktdump_bin@	\
 	@echld_test_bin@
 
-EXTRA_PROGRAMS = wireshark-gtk wireshark tshark tfshark capinfos captype editcap \
-	mergecap dftest randpkt text2pcap dumpcap reordercap rawshark androiddump \
-	sshdump	randpktdump echld_test
+EXTRA_PROGRAMS = wireshark-gtk wireshark tshark tfshark capinfos captype \
+	editcap mergecap dftest randpkt text2pcap dumpcap reordercap \
+	rawshark echld_test
 
 #
 # Wireshark configuration files are put in $(pkgdatadir).
@@ -366,19 +363,9 @@ endif		# HAVE_PLUGINS
 include Makefile.common
 
 if ENABLE_STATIC
-if HAVE_GTK
-wireshark_gtk_LDFLAGS = -Wl,-static -all-static
-endif
-if HAVE_Qt
-wireshark_LDFLAGS = -Wl,-static -all-static
-endif
+EXTRALINKFLAGS = -Wl,-static -all-static
 else
-if HAVE_GTK
-wireshark_gtk_LDFLAGS = -export-dynamic
-endif
-if HAVE_Qt
-wireshark_LDFLAGS = -export-dynamic @Qt_LDFLAGS@
-endif
+EXTRALINKFLAGS = -export-dynamic
 endif
 
 # Libraries and plugin flags with which to link wireshark.
@@ -389,19 +376,8 @@ endif
 # needed for X applications, and GTK+ applications are X applications
 # if the version of GTK+ they're built with runs atop X11).
 #
-# However, it *does* have to be linked with @GLIB_LIBS@; not all of
-# the necessary GLib libraries are included in @GTK_LIBS@.  To quote
-# Gentoo bug 423743 at
-#
-#	https://bugs.gentoo.org/show_bug.cgi?id=423743
-#
-# "The Makefile.am claims including GLIB_LIBS when linking wireshark is
-# unnecessary, because wireshark links to GTK_LIBS which is a superset.
-# It is not actually a superset: gmodule is included in GLIB_LIBS but
-# not in GTK_LIBS (unless accidentally on older glibs/gtks)."
-#
-# although it's also possible that -lgmodule is in GTK_LIBS but not
-# GLIB_LIBS (that's the case on my machine right now, for example).
+# GTK_CFLAGS/GTK_LIBS is a strict superset of GLIB_CFLAGS/GLIB_LIBS
+# (see configure.ac for pkg-config modules used).
 #
 wireshark_common_ldadd = \
 	capchild/libcapchild.a		\
@@ -424,33 +400,39 @@ wireshark_common_ldadd = \
 	@LIBGCRYPT_LIBS@		\
 	@LIBGNUTLS_LIBS@		\
 	@LIBSMI_LDFLAGS@		\
-	@SBC_LIBS@			\
-	@GLIB_LIBS@
+	@LIBNL_LIBS@
 
 if HAVE_Qt
 wireshark_SOURCES = $(WIRESHARK_COMMON_SRC) wireshark-qt.cpp
-wireshark_INCLUDES = $(WIRESHARK_COMMON_INCLUDES)
+
+wireshark_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS) $(Qt_CFLAGS)
+
+wireshark_LDFLAGS = $(AM_LDFLAGS) $(EXTRALINKFLAGS) $(Qt_LDFLAGS)
+
 wireshark_LDADD = \
-	ui/qt/libqtui.a \
-	$(wireshark_common_ldadd) \
-	@Qt_LIBS@
+	ui/qt/libqtui.a			\
+	$(wireshark_common_ldadd)	\
+	$(GLIB_LIBS)			\
+	$(Qt_LIBS)
 endif
 
 if HAVE_GTK
 wireshark_gtk_SOURCES = $(WIRESHARK_COMMON_SRC)
-wireshark_gtk_INCLUDES = $(WIRESHARK_COMMON_INCLUDES)
+
+wireshark_gtk_CPPFLAGS = $(AM_CPPFLAGS) $(GTK_CFLAGS)
+
+wireshark_gtk_LDFLAGS = $(AM_LDFLAGS) $(EXTRALINKFLAGS)
+
 wireshark_gtk_LDADD = \
-	ui/gtk/libgtkui.a \
-	$(wireshark_common_ldadd) \
-	@PORTAUDIO_LIBS@		\
-	@GTK_LIBS@
+	ui/gtk/libgtkui.a		\
+	$(wireshark_common_ldadd)	\
+	$(GTK_LIBS)			\
+	@PORTAUDIO_LIBS@
 endif
 
-if ENABLE_STATIC
-tshark_LDFLAGS = -Wl,-static -all-static
-else
-tshark_LDFLAGS = -export-dynamic
-endif
+tshark_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
+tshark_LDFLAGS = $(AM_LDFLAGS) $(EXTRALINKFLAGS)
 
 # Libraries and plugin flags with which to link tshark.
 tshark_LDADD = \
@@ -476,11 +458,9 @@ tshark_LDADD = \
 	@LIBGNUTLS_LIBS@		\
 	@LIBSMI_LDFLAGS@
 
-if ENABLE_STATIC
-tfshark_LDFLAGS = -Wl,-static -all-static
-else
-tfshark_LDFLAGS = -export-dynamic
-endif
+tfshark_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
+tfshark_LDFLAGS = $(AM_LDFLAGS) $(EXTRALINKFLAGS)
 
 # Libraries and plugin flags with which to link tfshark.
 tfshark_LDADD = \
@@ -501,11 +481,9 @@ tfshark_LDADD = \
 	@LIBGNUTLS_LIBS@		\
 	@LIBSMI_LDFLAGS@
 
-if ENABLE_STATIC
-rawshark_LDFLAGS = -Wl,-static -all-static
-else
-rawshark_LDFLAGS = -export-dynamic
-endif
+rawshark_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
+rawshark_LDFLAGS = $(AM_LDFLAGS) $(EXTRALINKFLAGS)
 
 # Libraries and plugin flags with which to link rawshark.
 rawshark_LDADD = \
@@ -529,50 +507,7 @@ rawshark_LDADD = \
 	@LIBGNUTLS_LIBS@		\
 	@LIBSMI_LDFLAGS@
 
-if ENABLE_STATIC
-androiddump_LDFLAGS = -Wl,-static -all-static
-else
-androiddump_LDFLAGS = -export-dynamic
-endif
-
-# Libraries and plugin flags with which to link androiddump.
-androiddump_LDADD = \
-	wiretap/libwiretap.la		\
-	wsutil/libwsutil.la		\
-	@GLIB_LIBS@			\
-	@SOCKET_LIBS@
-
-if ENABLE_STATIC
-	sshdump_LDFLAGS = -Wl,-static -all-static
-else
-	sshdump_LDFLAGS = -export-dynamic
-endif
-
-# Libraries and plugin flags with which to link sshdump.
-sshdump_LDADD = \
-	wiretap/libwiretap.la		\
-	wsutil/libwsutil.la		\
-	@GLIB_LIBS@			\
-	@LIBSSH_LIBS@		\
-	@SOCKET_LIBS@
-
-if ENABLE_STATIC
-	randpktdump_LDFLAGS = -Wl,-static -all-static
-else
-	randpktdump_LDFLAGS = -export-dynamic
-endif
-
-# Libraries and plugin flags with which to link randpktdump.
-randpktdump_LDADD = \
-	wiretap/libwiretap.la		\
-	wsutil/libwsutil.la		\
-	@GLIB_LIBS@			\
-	@SOCKET_LIBS@
-
-# Libraries with which to link text2pcap.
-text2pcap_LDADD = \
-	wsutil/libwsutil.la		\
-	@GLIB_LIBS@
+text2pcap_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
 
 # Don't turn on -Werror for text2pcap: its source includes text2pcap-scanner.c
 # which is generated (and therefore not always clean).
@@ -580,11 +515,20 @@ text2pcap_LDADD = \
 # doesn't seem worth the effort.
 text2pcap_CFLAGS = $(GENERATED_CFLAGS)
 
+# Libraries with which to link text2pcap.
+text2pcap_LDADD = \
+	wsutil/libwsutil.la		\
+	@GLIB_LIBS@
+
+mergecap_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
 # Libraries with which to link mergecap.
 mergecap_LDADD = \
 	wiretap/libwiretap.la		\
 	wsutil/libwsutil.la		\
 	@GLIB_LIBS@
+
+capinfos_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
 
 # Libraries with which to link capinfos.
 capinfos_LDADD = \
@@ -593,11 +537,15 @@ capinfos_LDADD = \
 	@GLIB_LIBS@			\
 	@LIBGCRYPT_LIBS@
 
+captype_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
 # Libraries with which to link captype.
 captype_LDADD = \
 	wiretap/libwiretap.la		\
 	wsutil/libwsutil.la		\
 	@GLIB_LIBS@
+
+editcap_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
 
 # Libraries with which to link editcap.
 editcap_LDADD = \
@@ -605,14 +553,19 @@ editcap_LDADD = \
 	wsutil/libwsutil.la		\
 	@GLIB_LIBS@
 
+reordercap_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
 # Libraries with which to link reordercap.
 reordercap_LDADD = \
 	wiretap/libwiretap.la		\
 	wsutil/libwsutil.la		\
 	@GLIB_LIBS@
 
+randpkt_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
 # Libraries with which to link randpkt.
 randpkt_LDADD = \
+	randpkt_core/librandpkt_core.a	\
 	wiretap/libwiretap.la		\
 	wsutil/libwsutil.la		\
 	@GLIB_LIBS@			\
@@ -621,6 +574,8 @@ randpkt_LDADD = \
 	@NSL_LIBS@			\
 	@C_ARES_LIBS@			\
 	@ADNS_LIBS@
+
+dftest_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
 
 # Libraries and plugin flags with which to link dftest.
 dftest_LDADD = \
@@ -641,6 +596,8 @@ dftest_LDADD = \
 	@LIBGNUTLS_LIBS@		\
 	@LIBSMI_LDFLAGS@
 
+echld_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
 echld_test_LDADD = \
 	epan/libwireshark.la		\
 	echld/libechld.la		\
@@ -656,6 +613,12 @@ echld_test_DEPENDENCIES = \
 	echld/libechld.la \
 	epan/libwireshark.la
 
+dumpcap_CPPFLAGS = $(AM_CPPFLAGS) $(GLIB_CFLAGS)
+
+dumpcap_CFLAGS = $(AM_CFLAGS) $(PIE_CFLAGS)
+
+dumpcap_LDFLAGS = $(AM_LDFLAGS) $(PIE_LDFLAGS)
+
 # Libraries with which to link dumpcap.
 dumpcap_LDADD = \
 	caputils/libcaputils.a		\
@@ -666,9 +629,8 @@ dumpcap_LDADD = \
 	@NSL_LIBS@			\
 	@SYSTEMCONFIGURATION_FRAMEWORKS@	\
 	@COREFOUNDATION_FRAMEWORKS@	\
-	@LIBCAP_LIBS@
-dumpcap_CFLAGS = $(AM_CFLAGS) $(PIE_CFLAGS)
-dumpcap_LDFLAGS = $(PIE_LDFLAGS)
+	@LIBCAP_LIBS@			\
+	@LIBNL_LIBS@
 
 #
 # Build the version string
@@ -742,15 +704,14 @@ EXTRA_DIST = \
 	README.vmware		\
 	README.windows		\
 	abi-descriptor.template	\
-	aclocal-fallback/libsmi.m4 \
-	aclocal-fallback/libgcrypt.m4 \
-	aclocal-fallback/glib-2.0.m4 \
-	aclocal-fallback/gtk-2.0.m4 \
-	aclocal-fallback/gtk-3.0.m4 \
+	aclocal-fallback/ax_append_flag.m4		\
 	aclocal-fallback/ax_check_compile_flag.m4	\
-	aclocal-fallback/ax_gcc_x86_cpuid.m4	\
-	aclocal-fallback/ax_ext.m4	\
+	aclocal-fallback/ax_compiler_vendor.m4		\
+	aclocal-fallback/ax_ext.m4			\
+	aclocal-fallback/ax_gcc_x86_cpuid.m4		\
 	aclocal-fallback/ax_gcc_x86_avx_xgetbv.m4	\
+	aclocal-fallback/libsmi.m4			\
+	aclocal-fallback/libgcrypt.m4			\
 	aclocal-flags		\
 	adns_dll.dep		\
 	adns_dll.rc		\
@@ -1408,9 +1369,11 @@ DIST_SUBDIRS = \
 	help		\
 	packaging	\
 	plugins		\
+	randpkt_core	\
 	tools		\
 	wiretap		\
 	wsutil		\
+	extcap		\
 	docbook
 
 SUBDIRS = \
@@ -1427,6 +1390,8 @@ SUBDIRS = \
 	ui			\
 	@wireshark_SUBDIRS@	\
 	ui/cli			\
+	randpkt_core		\
+	extcap			\
 	.			\
 	doc
 
@@ -1639,7 +1604,10 @@ osx-app: $(PROGRAMS) $(SCRIPTS) $(MANS) $(DATA) packaging/macosx/Info.plist
 		cd $(srcdir)/packaging/macosx ; \
 		./osx-app.sh @OSX_APP_FLAGS@ \
 			--create-bundle \
-			--binary-path ../staging/$(PACKAGE).inst$(bindir) ; \
+			--binary-path ../staging/$(PACKAGE).inst$(bindir) \
+			--plugin-path ../staging/$(PACKAGE).inst$(plugindir) \
+			--extcap-path ../staging/$(PACKAGE).inst$(extcapdir) \
+			--library-path ../staging/$(PACKAGE).inst$(libdir) ; \
 	else \
 		echo "Error: OS X packaging tools not found." ; \
 		echo "Package build abandoned." ; \
@@ -1695,6 +1663,7 @@ checkapi: checkapi_local
 	cd epan/dissectors && $(MAKE) checkapi
 	cd epan/dissectors/dcerpc && $(MAKE) checkapi
 	cd plugins && $(MAKE) checkapi
+	cd randpkt_core && $(MAKE) checkapi
 	cd wsutil && $(MAKE) checkapi
 
 wsar_html: doxygen.cfg doxygen_global.cfg FORCE
@@ -1703,6 +1672,7 @@ if HAVE_DOXYGEN
 	cd epan && $(MAKE) $@
 	cd capchild && $(MAKE) $@
 	cd caputils && $(MAKE) $@
+	cd randpkt_core && $(MAKE) $@
 	cd ui && $(MAKE) $@
 	(umask 022 ; $(DOXYGEN) doxygen.cfg)
 endif

@@ -862,7 +862,7 @@ static gint ett_p22_T_choice = -1;
 /*--- Cyclic dependencies ---*/
 
 /* IPM -> Body -> BodyPart -> BodyPart/basic -> MessageBodyPart -> MessageData -> IPM */
-int dissect_p22_IPM(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
+/*int dissect_p22_IPM(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);*/
 
 /* IPMSynopsis -> BodyPartSynopsis -> MessageBodyPartSynopsis -> IPMSynopsis */
 static int dissect_p22_IPMSynopsis(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_);
@@ -4684,7 +4684,7 @@ dissect_p22(tvbuff_t *tvb, packet_info *pinfo, proto_tree *parent_tree, void* da
 	asn1_ctx_t asn1_ctx;
 	asn1_ctx_init(&asn1_ctx, ASN1_ENC_BER, TRUE, pinfo);
 
-	if(parent_tree){
+	if (parent_tree) {
 		item = proto_tree_add_item(parent_tree, proto_p22, tvb, 0, -1, ENC_NA);
 		tree = proto_item_add_subtree(item, ett_p22);
 	}

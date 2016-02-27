@@ -238,6 +238,28 @@ guint8 lchId_type_table[]= {
 	MAC_CONTENT_PS_DTCH,	/* 14 Interactive PS => DTCH*/
 	MAC_CONTENT_CCCH	/* This is CCCH? */
 };
+
+/* Mapping logicalchannel id to RLC_MODE */
+guint8 lchId_rlc_map[] = {
+        0,
+        RLC_UM, /* Logical channel id = 1 is SRB1 which uses RLC_UM*/
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_TM, /*5 to 7 Conv CS Speech*/
+        RLC_TM,
+        RLC_TM, /*...*/
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM, /* This is CCCH which is UM?, probably not */
+};
+
+
 /* Preference variables */
 /* Array with preference variables for easy looping, TODO: merge this with
  * lchId_type_table[] */
@@ -346,7 +368,7 @@ static void add_hsdsch_bind(packet_info *pinfo){
 	}
 
 	/* Set port to zero use that as an indication of whether we have data or not */
-	set_address(&null_addr, AT_NONE, 0, NULL);
+	clear_address(&null_addr);
 	for (i = 0; i < maxNrOfMACdFlows; i++) {
 		if (nbap_hsdsch_channel_info[i].crnc_port != 0){
 			conversation = find_conversation(pinfo->num, &(nbap_hsdsch_channel_info[i].crnc_address), &null_addr,

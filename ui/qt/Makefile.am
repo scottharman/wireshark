@@ -22,7 +22,7 @@
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
 
-AM_CPPFLAGS += -I$(top_srcdir)/wiretap $(LIBGCRYPT_CFLAGS) $(LIBGNUTLS_CFLAGS)
+AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GLIB_CFLAGS) $(Qt_CFLAGS)
 
 noinst_LIBRARIES = libqtui.a
 
@@ -96,7 +96,7 @@ am__v_UIC_0 = @echo "  UIC     " $@;
 SUFFIXES = .moc.cpp .qrc .rcc.cpp
 
 .h.moc.cpp:
-	$(AM_V_MOC)$(MOC) --no-notes -I.. -I../.. -o $@ $<
+	$(AM_V_MOC)$(MOC) $(MOC_OPTIONS) -I.. -I../.. -o $@ $<
 
 .qrc.rcc.cpp:
 	$(MKDIR_P) $(@D)
@@ -255,6 +255,8 @@ sctp_graph_dialog.$(OBJEXT): ui_sctp_graph_dialog.h
 sctp_graph_arwnd_dialog.$(OBJEXT): ui_sctp_graph_arwnd_dialog.h
 
 sctp_graph_byte_dialog.$(OBJEXT): ui_sctp_graph_byte_dialog.h
+
+show_packet_bytes_dialog.$(OBJEXT): ui_show_packet_bytes_dialog.h
 
 splash_overlay.$(OBJEXT): ui_splash_overlay.h
 

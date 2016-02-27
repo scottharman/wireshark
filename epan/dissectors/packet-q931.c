@@ -2483,7 +2483,7 @@ dissect_q931_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_item  *ti;
     guint8      prot_discr;
     guint8      call_ref_len;
-    guint8      call_ref[15];
+    guint8      call_ref[16];
     guint32     call_ref_val;
     guint8      message_type, segmented_message_type;
     guint8      info_element;
@@ -4002,6 +4002,7 @@ proto_reg_handoff_q931(void)
 {
     dissector_add_uint("lapd.sapi", LAPD_SAPI_Q931, q931_handle);
     dissector_add_uint("sctp.ppi", H323_PAYLOAD_PROTOCOL_ID, q931_over_ip_handle);
+    dissector_add_uint("osinl.incl", NLPID_Q_931, q931_handle);
 
     /*
      * Attempt to get a handle for the H.225 dissector.

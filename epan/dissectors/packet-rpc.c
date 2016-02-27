@@ -406,7 +406,7 @@ rpcstat_packet(void *pss, packet_info *pinfo, epan_dissect_t *edt _U_, const voi
 static guint
 rpcstat_param(register_srt_t* srt, const char* opt_arg, char** err)
 {
-	guint pos = 0;
+	int pos = 0;
 	int program, version;
 	rpcstat_tap_data_t* tap_data;
 
@@ -1632,7 +1632,7 @@ dissect_rpc_authgss_priv_data(tvbuff_t *tvb, proto_tree *tree, int offset,
 	return offset;
 }
 
-static address null_address = { AT_NONE, 0, NULL };
+static address null_address = ADDRESS_INIT_NONE;
 
 /*
  * Attempt to find a conversation for a call and, if we don't find one,
@@ -3224,7 +3224,7 @@ call_message_dissector(tvbuff_t *tvb, tvbuff_t *rec_tvb, packet_info *pinfo,
 static int
 dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 		     proto_tree *tree, rec_dissector_t dissector, gboolean is_heur,
-		     int proto, int ett, gboolean defragment, gboolean first_pdu, struct tcpinfo *tcpinfo)
+		     int proto, int ett, gboolean first_pdu, struct tcpinfo *tcpinfo)
 {
 	guint32 seq;
 	guint32 rpc_rm;
@@ -3365,8 +3365,12 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 	/*
 	 * If we're not defragmenting, just hand this to the
 	 * disssector.
+	 *
+	 * We defragment only if we should (rpc_defragment true) *and*
+	 * we can (tvb_len == tvb_reported_len, so that we have all the
+	 * data in the fragment).
 	 */
-	if (!defragment) {
+	if (!rpc_defragment || tvb_len != tvb_reported_len) {
 		/*
 		 * This is the first fragment we've seen, and it's also
 		 * the last fragment; that means the record wasn't
@@ -3480,6 +3484,8 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 				 * Show it as a record marker plus data, under
 				 * a top-level tree for this protocol.
 				 */
+				col_set_str(pinfo->cinfo, COL_PROTOCOL, "RPC");
+				col_set_str(pinfo->cinfo, COL_INFO, "Fragment");
 				make_frag_tree(frag_tvb, tree, proto, ett,rpc_rm);
 
 				/*
@@ -3547,6 +3553,8 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 			 * a top-level tree for this protocol,
 			 * but don't hand it to the dissector
 			 */
+			col_set_str(pinfo->cinfo, COL_PROTOCOL, "RPC");
+			col_set_str(pinfo->cinfo, COL_INFO, "Fragment");
 			make_frag_tree(frag_tvb, tree, proto, ett, rpc_rm);
 
 			/*
@@ -3577,6 +3585,8 @@ dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 			 * a top-level tree for this protocol,
 			 * but don't show it to the dissector.
 			 */
+			col_set_str(pinfo->cinfo, COL_PROTOCOL, "RPC");
+			col_set_str(pinfo->cinfo, COL_INFO, "Fragment");
 			make_frag_tree(frag_tvb, tree, proto, ett, rpc_rm);
 
 			/*
@@ -3767,7 +3777,7 @@ static int
 find_and_dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 			      proto_tree *tree, rec_dissector_t dissector,
 			      gboolean is_heur,
-			      int proto, int ett, gboolean defragment, struct tcpinfo* tcpinfo)
+			      int proto, int ett, struct tcpinfo* tcpinfo)
 {
 
 	int   offReply;
@@ -3782,7 +3792,6 @@ find_and_dissect_rpc_fragment(tvbuff_t *tvb, int offset, packet_info *pinfo,
 	len = dissect_rpc_fragment(tvb, offReply,
 				   pinfo, tree,
 				   dissector, is_heur, proto, ett,
-				   defragment,
 				   TRUE /* force first-pdu state */, tcpinfo);
 
 	/* misses are reported as-is */
@@ -3827,7 +3836,7 @@ dissect_rpc_tcp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 		 */
 		len = dissect_rpc_fragment(tvb, offset, pinfo, tree,
 		    dissect_rpc_message, is_heur, proto_rpc, ett_rpc,
-		    rpc_defragment, first_pdu, tcpinfo);
+		    first_pdu, tcpinfo);
 
 		if ((len == 0) && first_pdu && rpc_find_fragment_start) {
 			/*
@@ -3836,7 +3845,7 @@ dissect_rpc_tcp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			 */
 			len = find_and_dissect_rpc_fragment(tvb, offset, pinfo, tree,
 				 dissect_rpc_message, is_heur, proto_rpc, ett_rpc,
-				 rpc_defragment, tcpinfo);
+				 tcpinfo);
 		}
 
 		first_pdu = FALSE;
@@ -3855,12 +3864,13 @@ dissect_rpc_tcp_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 			break;
 		}
 
-		/*  Set a fence so whatever the subdissector put in the
-		 *  Info column stays there.  This is useful when the
-		 *  subdissector clears the column (which it might have to do
-		 *  if it runs over some other protocol too) and there are
-		 *  multiple PDUs in one frame.
+		/*  Set fences so whatever the subdissector put in the
+		 *  Protocol and Info columns stay there.  This is useful
+		 *  when the subdissector clears the column (which it
+		 *  might have to do if it runs over some other protocol
+		 *  too) and there are multiple PDUs in one frame.
 		 */
+		col_set_fence(pinfo->cinfo, COL_PROTOCOL);
 		col_set_fence(pinfo->cinfo, COL_INFO);
 
 		/* PDU tracking

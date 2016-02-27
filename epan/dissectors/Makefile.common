@@ -185,6 +185,7 @@ ASN1_DISSECTOR_SRC = \
 	packet-sabp.c	\
 	packet-sbc-ap.c	\
 	packet-smrse.c	\
+	packet-snmp.c	\
 	packet-spnego.c	\
 	packet-sv.c	\
 	packet-sysdig-event.c	\
@@ -192,6 +193,7 @@ ASN1_DISSECTOR_SRC = \
 	packet-t124.c	\
 	packet-t125.c	\
 	packet-t38.c	\
+	packet-tcap.c	\
 	packet-tetra.c	\
 	packet-ulp.c	\
 	packet-wlancertextn.c	\
@@ -210,8 +212,6 @@ CORBA_IDL_DISSECTOR_SRC =
 # asn2wrs-generated ASN.1 dissectors with warnings.
 #
 DIRTY_ASN1_DISSECTOR_SRC = \
-	packet-snmp.c	\
-	packet-tcap.c	\
 	$(CUSTOM_DIRTY_ASN1_DISSECTOR_SRC)
 
 #
@@ -374,7 +374,6 @@ DISSECTOR_SRC = \
 	packet-btle.c		\
 	packet-btle_rf.c	\
 	packet-btmcap.c		\
-	packet-btobex.c		\
 	packet-btrfcomm.c	\
 	packet-btsap.c		\
 	packet-btsdp.c		\
@@ -612,6 +611,7 @@ DISSECTOR_SRC = \
 	packet-fip.c		\
 	packet-fix.c		\
 	packet-flexnet.c	\
+	packet-flexray.c\
 	packet-flip.c		\
 	packet-fmp.c		\
 	packet-fmp_notify.c	\
@@ -996,6 +996,7 @@ DISSECTOR_SRC = \
 	packet-nntp.c		\
 	packet-noe.c		\
 	packet-nsip.c		\
+	packet-nsh.c		\
 	packet-nsrp.c		\
 	packet-nstrace.c	\
 	packet-nt-oui.c		\
@@ -1006,6 +1007,7 @@ DISSECTOR_SRC = \
 	packet-nwmtp.c		\
 	packet-nwp.c		\
 	packet-oampdu.c		\
+	packet-obex.c		\
 	packet-ocfs2.c		\
 	packet-oicq.c		\
 	packet-oipf.c		\
@@ -1277,6 +1279,7 @@ DISSECTOR_SRC = \
 	packet-turnchannel.c	\
 	packet-tuxedo.c		\
 	packet-tzsp.c		\
+	packet-u3v.c		\
 	packet-ua.c		\
 	packet-ua3g.c		\
 	packet-uasip.c		\
@@ -1299,7 +1302,9 @@ DISSECTOR_SRC = \
 	packet-usb-masstorage.c	\
 	packet-usb-video.c	\
 	packet-usb.c		\
+	packet-usbip.c		\
 	packet-user_encap.c	\
+	packet-userlog.c	\
 	packet-uts.c		\
 	packet-v120.c		\
 	packet-v150fw.c		\
@@ -1729,6 +1734,7 @@ DISSECTOR_INCLUDES =	\
 	packet-umts_mac.h	\
 	packet-usb.h	\
 	packet-usb-hid.h	\
+	packet-usbip.h	\
 	packet-wap.h	\
 	packet-wccp.h	\
 	packet-windows-common.h	\

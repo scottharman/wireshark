@@ -27,6 +27,8 @@ The following features are new (or have been significantly updated)
 since version 2.0.0:
 ** You can now switch between between Capture and File Format dissection of
 the current capture file via the View menu in the Qt GUI.
+** You can now show selected packet bytes as ASCII, HTML, Image, ISO 8859-1, Raw or UTF-8.
+** You can now use regular expressions in Find Packet.
 
 //=== Removed Dissectors
 
@@ -55,11 +57,19 @@ Zigbee Protocol Clusters Dissectors Added (Closures, Lighting, General, Measurem
 LAT protocol (DECNET)
 Ericsson IPOS Kernel Packet Header Dissector Added (IPOS)
 STANAG 5602 SIMPLE
+UserLog Protocol
+FLEXRAY Protocol dissector added (automotive bus)
+USB3 Vision Protocol (USB machine vision cameras)
+USBIP Protocol
+
 // Items in --sort-and-group-- blocks will be sorted and comma-separated.
 --sort-and-group--
 --sort-and-group--
 
 === Updated Protocol Support
+
+Bluetooth OBEX dissector (btobex) was renamed to Obex Dissector (obex), allow to
+DecodeAs it over USB, TCP and UDP.
 
 Too many protocols have been updated to list here.
 

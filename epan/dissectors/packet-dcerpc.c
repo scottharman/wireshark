@@ -797,8 +797,8 @@ decode_dcerpc_binding_free(void *binding_in)
 {
     decode_dcerpc_bind_values_t *binding = (decode_dcerpc_bind_values_t *)binding_in;
 
-    g_free((void *) binding->addr_a.data);
-    g_free((void *) binding->addr_b.data);
+    free_address(&binding->addr_a);
+    free_address(&binding->addr_b);
     if (binding->ifname)
         g_string_free(binding->ifname, TRUE);
     g_free(binding);
@@ -945,9 +945,9 @@ decode_dcerpc_binding_cmp(gconstpointer a, gconstpointer b)
 
 /* remove a binding (looking the same way as the given one) */
 static gboolean
-decode_dcerpc_binding_reset(const char *name _U_, const gpointer pattern)
+decode_dcerpc_binding_reset(const char *name _U_, gconstpointer pattern)
 {
-    decode_dcerpc_bind_values_t *binding = (decode_dcerpc_bind_values_t*)pattern;
+    const decode_dcerpc_bind_values_t *binding = (const decode_dcerpc_bind_values_t *)pattern;
     GSList *le;
     decode_dcerpc_bind_values_t *old_binding;
 
@@ -962,15 +962,15 @@ decode_dcerpc_binding_reset(const char *name _U_, const gpointer pattern)
 
     decode_dcerpc_bindings = g_slist_remove(decode_dcerpc_bindings, le->data);
 
-    g_free((void *) old_binding->addr_a.data);
-    g_free((void *) old_binding->addr_b.data);
+    free_address(&old_binding->addr_a);
+    free_address(&old_binding->addr_b);
     g_string_free(old_binding->ifname, TRUE);
     g_free(old_binding);
     return FALSE;
 }
 
 static gboolean
-dcerpc_decode_as_change(const char *name, const gpointer pattern, gpointer handle, gchar* list_name)
+dcerpc_decode_as_change(const char *name, gconstpointer pattern, gpointer handle, gchar* list_name)
 {
     decode_dcerpc_bind_values_t *binding = (decode_dcerpc_bind_values_t*)pattern;
     decode_dcerpc_bind_values_t *stored_binding;
@@ -1082,8 +1082,8 @@ dcerpc_fragment_temporary_key(const packet_info *pinfo, const guint32 id,
     dcerpc_fragment_key *key = g_slice_new(dcerpc_fragment_key);
     const e_dce_dg_common_hdr_t *hdr = (const e_dce_dg_common_hdr_t *)data;
 
-    key->src = pinfo->src;
-    key->dst = pinfo->dst;
+    copy_address_shallow(&key->src, &pinfo->src);
+    copy_address_shallow(&key->dst, &pinfo->dst);
     key->id = id;
     key->act_id = hdr->act_id;
 
@@ -1124,8 +1124,8 @@ dcerpc_fragment_free_persistent_key(gpointer ptr)
         /*
          * Free up the copies of the addresses from the old key.
          */
-        g_free((gpointer)key->src.data);
-        g_free((gpointer)key->dst.data);
+        free_address(&key->src);
+        free_address(&key->dst);
 
         g_slice_free(dcerpc_fragment_key, key);
     }
@@ -1978,7 +1978,7 @@ dcerpcstat_packet(void *pss, packet_info *pinfo, epan_dissect_t *edt _U_, const 
 static guint
 dcerpcstat_param(register_srt_t* srt, const char* opt_arg, char** err)
 {
-    guint pos = 0;
+    int pos = 0;
     guint32 i, max_procs;
     dcerpcstat_tap_data_t* tap_data;
     guint d1,d2,d3,d40,d41,d42,d43,d44,d45,d46,d47;
@@ -2414,7 +2414,7 @@ dissect_ndr_ucvarray_core(tvbuff_t *tvb, gint offset, packet_info *pinfo,
                                        pinfo, tree, di, drep);
                 if (offset <= old_offset)
                     THROW(ReportedBoundsError);
-        } else {
+        } else if (fnct_bytes) {
             for (i=0 ;i<di->array_actual_count; i++) {
                 old_offset = offset;
                 offset = (*fnct_bytes)(tvb, offset, pinfo, tree, di, drep);
@@ -6512,7 +6512,7 @@ proto_register_dcerpc(void)
           { "Referent ID", "dcerpc.referent_id", FT_UINT32, BASE_HEX,
             NULL, 0, "Referent ID for this NDR encoded pointer", HFILL }},
         { &hf_dcerpc_referent_id64,
-          { "Referent ID", "dcerpc.referent_id", FT_UINT64, BASE_HEX,
+          { "Referent ID", "dcerpc.referent_id64", FT_UINT64, BASE_HEX,
             NULL, 0, "Referent ID for this NDR encoded pointer", HFILL }},
         { &hf_dcerpc_ver,
           { "Version", "dcerpc.ver", FT_UINT8, BASE_DEC, NULL, 0x0, NULL, HFILL }},
@@ -6914,7 +6914,7 @@ proto_register_dcerpc(void)
     };
 
     static ei_register_info ei[] = {
-        { &ei_dcerpc_fragment, { "dcerpc.fragment", PI_REASSEMBLE, PI_CHAT, "%s fragment", EXPFILL }},
+        { &ei_dcerpc_fragment, { "dcerpc.fragment.reassemble", PI_REASSEMBLE, PI_CHAT, "%s fragment", EXPFILL }},
         { &ei_dcerpc_fragment_reassembled, { "dcerpc.fragment_reassembled", PI_REASSEMBLE, PI_CHAT, "%s fragment, reassembled", EXPFILL }},
         { &ei_dcerpc_cn_ctx_id_no_bind, { "dcerpc.cn_ctx_id.no_bind", PI_UNDECODED, PI_NOTE, "No bind info for interface Context ID %u - capture start too late?", EXPFILL }},
         { &ei_dcerpc_no_request_found, { "dcerpc.no_request_found", PI_SEQUENCE, PI_NOTE, "No request to this DCE/RPC call found", EXPFILL }},

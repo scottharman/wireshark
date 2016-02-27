@@ -34,10 +34,10 @@
 #include <epan/expert.h>
 #include <epan/prefs.h>
 
-#include "../cfile.h"
-#include "../file.h"
+#include "../../cfile.h"
+#include "../../file.h"
 #ifdef HAVE_LIBPCAP
-#include "../capture_opts.h"
+#include "../../capture_opts.h"
 #include <capchild/capture_session.h>
 #include "ui/capture.h"
 #endif
@@ -57,7 +57,7 @@
 #include "ui/gtk/gtkglobals.h"
 #include "ui/gtk/expert_comp_dlg.h"
 #include "ui/gtk/stock_icons.h"
-#ifndef HAVE_GRESOURCE
+#ifndef HAVE_GDK_GRESOURCE
 #include "ui/gtk/pixbuf-csource.h"
 #endif
 #include "ui/gtk/profile_dlg.h"

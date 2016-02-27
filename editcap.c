@@ -60,6 +60,8 @@
 
 #include <wiretap/wtap.h>
 
+#include "epan/etypes.h"
+
 #ifndef HAVE_GETOPT_LONG
 #include "wsutil/wsgetopt.h"
 #endif
@@ -87,6 +89,8 @@
 #include <wsutil/str_util.h>
 #include <wsutil/ws_diag_control.h>
 #include <wsutil/ws_version_info.h>
+#include <wiretap/wtap_opttypes.h>
+#include <wiretap/pcapng.h>
 
 #include "ringbuffer.h" /* For RINGBUFFER_MAX_NUM_FILES */
 
@@ -167,6 +171,7 @@ static double                 err_prob                  = 0.0;
 static time_t                 starttime                 = 0;
 static time_t                 stoptime                  = 0;
 static gboolean               check_startstop           = FALSE;
+static gboolean               rem_vlan                  = FALSE;
 static gboolean               dup_detect                = FALSE;
 static gboolean               dup_detect_by_time        = FALSE;
 
@@ -545,6 +550,34 @@ set_rel_time(char *optarg_str_p)
     relative_time_window.nsecs = (int)val;
 }
 
+#define LINUX_SLL_OFFSETP 14
+#define VLAN_SIZE 4
+static void
+sll_remove_vlan_info(guint8* fd, guint32* len) {
+    if (g_ntohs(*(fd + LINUX_SLL_OFFSETP)) == ETHERTYPE_VLAN) {
+        int rest_len;
+        /* point to start of vlan */
+        fd = fd + LINUX_SLL_OFFSETP;
+        /* bytes to read after vlan info */
+        rest_len = *len - (LINUX_SLL_OFFSETP + VLAN_SIZE);
+        /* remove vlan info from packet */
+        memmove(fd, fd + VLAN_SIZE, rest_len);
+        *len -= 4;
+    }
+}
+
+static void
+remove_vlan_info(const struct wtap_pkthdr *phdr, guint8* fd, guint32* len) {
+    switch (phdr->pkt_encap) {
+        case WTAP_ENCAP_SLL:
+            sll_remove_vlan_info(fd, len);
+            break;
+        default:
+            /* no support for current pkt_encap */
+            break;
+    }
+}
+
 static gboolean
 is_duplicate(guint8* fd, guint32 len) {
     int i;
@@ -710,6 +743,7 @@ print_usage(FILE *output)
     fprintf(output, "                         given time (format as YYYY-MM-DD hh:mm:ss).\n");
     fprintf(output, "\n");
     fprintf(output, "Duplicate packet removal:\n");
+    fprintf(output, "  --novlan                remove vlan info from packets before checking for duplicates.\n");
     fprintf(output, "  -d                     remove packet if duplicate (window == %d).\n", DEFAULT_DUP_DEPTH);
     fprintf(output, "  -D <dup window>        remove packet if duplicate; configurable <dup window>\n");
     fprintf(output, "                         Valid <dup window> values are 0 to %d.\n", MAX_DUP_DEPTH);
@@ -904,9 +938,9 @@ get_editcap_runtime_info(GString *str)
 
 static wtap_dumper *
 editcap_dump_open(const char *filename, guint32 snaplen,
-                  wtapng_section_t *shb_hdr,
+                  wtap_optionblock_t shb_hdr,
                   wtapng_iface_descriptions_t *idb_inf,
-                  wtapng_name_res_t *nrb_hdr, int *write_err)
+                  wtap_optionblock_t nrb_hdr, int *write_err)
 {
   wtap_dumper *pdh;
 
@@ -935,6 +969,7 @@ main(int argc, char *argv[])
     gchar        *read_err_info, *write_err_info;
     int           opt;
     static const struct option long_options[] = {
+        {"novlan", no_argument, NULL, 0x8100},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         {0, 0, 0, 0 }
@@ -965,8 +1000,9 @@ main(int argc, char *argv[])
     const struct wtap_pkthdr    *phdr;
     struct wtap_pkthdr           temp_phdr;
     wtapng_iface_descriptions_t *idb_inf = NULL;
-    wtapng_section_t            *shb_hdr = NULL;
-    wtapng_name_res_t           *nrb_hdr = NULL;
+    wtap_optionblock_t           shb_hdr = NULL;
+    wtap_optionblock_t           nrb_hdr = NULL;
+    char                        *shb_user_appl;
 
 #ifdef HAVE_PLUGINS
     char* init_progfile_dir_error;
@@ -1020,6 +1056,12 @@ main(int argc, char *argv[])
     /* Process the options */
     while ((opt = getopt_long(argc, argv, "a:A:B:c:C:dD:E:F:hi:I:Lo:rs:S:t:T:vVw:", long_options, NULL)) != -1) {
         switch (opt) {
+        case 0x8100:
+        {
+            rem_vlan = TRUE;
+            break;
+        }
+
         case 'a':
         {
             guint frame_number;
@@ -1371,8 +1413,11 @@ main(int argc, char *argv[])
                 g_assert(filename);
 
                 /* If we don't have an application name add Editcap */
-                if (shb_hdr->shb_user_appl == NULL) {
-                    shb_hdr->shb_user_appl = g_strdup("Editcap " VERSION);
+                wtap_optionblock_get_option_string(shb_hdr, OPT_SHB_USERAPPL, &shb_user_appl);
+                if (shb_user_appl == NULL) {
+                    shb_user_appl = g_strdup("Editcap " VERSION);
+                    wtap_optionblock_set_option_string(shb_hdr, OPT_SHB_USERAPPL, shb_user_appl);
+                    g_free(shb_user_appl);
                 }
 
                 pdh = editcap_dump_open(filename,
@@ -1562,9 +1607,7 @@ main(int argc, char *argv[])
                         previous_time = phdr->ts;
                     }
 
-                    /* assume that if the frame's tv_sec is 0, then
-                     * the timestamp isn't supported */
-                    if (phdr->ts.secs > 0 && time_adj.tv.secs != 0) {
+                    if (time_adj.tv.secs != 0) {
                         temp_phdr = *phdr;
                         if (time_adj.is_negative)
                             temp_phdr.ts.secs -= time_adj.tv.secs;
@@ -1573,9 +1616,7 @@ main(int argc, char *argv[])
                         phdr = &temp_phdr;
                     }
 
-                    /* assume that if the frame's tv_sec is 0, then
-                     * the timestamp isn't supported */
-                    if (phdr->ts.secs > 0 && time_adj.tv.nsecs != 0) {
+                    if (time_adj.tv.nsecs != 0) {
                         temp_phdr = *phdr;
                         if (time_adj.is_negative) { /* subtract */
                             if (temp_phdr.ts.nsecs < time_adj.tv.nsecs) { /* borrow */
@@ -1595,6 +1636,12 @@ main(int argc, char *argv[])
                         phdr = &temp_phdr;
                     }
                 } /* time stamp adjustment */
+
+                /* remove vlan info */
+                if (rem_vlan) {
+                    /* TODO: keep casting const like this? change pointer instead of value? */
+                    remove_vlan_info(phdr, buf, (guint32 *) &phdr->caplen);
+                }
 
                 /* suppress duplicates by packet window */
                 if (dup_detect) {
@@ -1832,9 +1879,9 @@ main(int argc, char *argv[])
                     wtap_strerror(write_err));
             goto error_on_exit;
         }
-        wtap_free_shb(shb_hdr);
+        wtap_optionblock_free(shb_hdr);
         shb_hdr = NULL;
-        wtap_free_nrb(nrb_hdr);
+        wtap_optionblock_free(nrb_hdr);
         nrb_hdr = NULL;
         g_free(filename);
 
@@ -1858,8 +1905,8 @@ main(int argc, char *argv[])
     return 0;
 
 error_on_exit:
-    wtap_free_shb(shb_hdr);
-    wtap_free_nrb(nrb_hdr);
+    wtap_optionblock_free(shb_hdr);
+    wtap_optionblock_free(nrb_hdr);
     g_free(idb_inf);
     exit(2);
 }

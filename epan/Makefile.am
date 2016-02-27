@@ -40,8 +40,10 @@ DIST_SUBDIRS = $(SUBDIRS) $(wslua_dist_dir)
 
 ACLOCAL_AMFLAGS = `../aclocal-flags`
 
-AM_CPPFLAGS += -I$(builddir)/wslua $(LUA_CFLAGS) $(LIBGNUTLS_CFLAGS) \
-	$(LIBGCRYPT_CFLAGS) $(LIBSMI_CFLAGS) $(LIBGEOIP_CFLAGS) $(KRB5_CFLAGS)
+AM_CPPFLAGS = $(INCLUDEDIRS) -I$(builddir)/wslua $(WS_CPPFLAGS) \
+	$(GLIB_CFLAGS) $(LUA_CFLAGS) $(LIBGNUTLS_CFLAGS) \
+	$(LIBGCRYPT_CFLAGS) $(LIBSMI_CFLAGS) $(LIBGEOIP_CFLAGS) \
+	$(KRB5_CFLAGS)
 
 noinst_LTLIBRARIES = libwireshark_generated.la libwireshark_asmopt.la
 lib_LTLIBRARIES = libwireshark.la
@@ -55,11 +57,13 @@ libwireshark_la_LDFLAGS = -version-info 0:0:0 @LDFLAGS_SHAREDLIB@
 libwireshark_la_SOURCES = \
 	$(LIBWIRESHARK_SRC)	\
 	$(LIBWIRESHARK_INCLUDES)
+
 libwireshark_la_CPPFLAGS = $(AM_CPPFLAGS) -DWS_BUILD_DLL
 
 libwireshark_generated_la_SOURCES = \
 	$(LIBWIRESHARK_GENERATED_C_FILES) \
 	$(LIBWIRESHARK_GENERATED_HEADER_FILES)
+
 libwireshark_generated_la_CFLAGS = $(GENERATED_CFLAGS)
 
 nodist_libwireshark_generated_la_SOURCES = \
@@ -119,24 +123,45 @@ BUILT_SOURCES = \
 # Add the object files for missing routines, if any.
 #
 libwireshark_la_LIBADD = \
-	libwireshark_generated.la \
-	libwireshark_asmopt.la crypt/libairpdcap.la \
-	ftypes/libftypes.la dfilter/libdfilter.la dissectors/libdissectors.la \
-	dissectors/libdirtydissectors.la dissectors/libfiledissectors.la \
-	nghttp2/libnghttp2.la wmem/libwmem.la $(wslua_lib) \
-	@SOCKET_LIBS@ @NSL_LIBS@ \
-	@C_ARES_LIBS@ @ADNS_LIBS@ @LIBGCRYPT_LIBS@ @LIBGNUTLS_LIBS@ \
-	@KRB5_LIBS@ @SSL_LIBS@ @LIBSMI_LDFLAGS@ @GEOIP_LIBS@ \
-	${top_builddir}/wiretap/libwiretap.la @GLIB_LIBS@ \
-	${top_builddir}/wsutil/libwsutil.la -lm
+	libwireshark_generated.la		\
+	libwireshark_asmopt.la			\
+	crypt/libairpdcap.la			\
+	ftypes/libftypes.la			\
+	dfilter/libdfilter.la			\
+	dissectors/libdissectors.la		\
+	dissectors/libdirtydissectors.la	\
+	dissectors/libfiledissectors.la		\
+	nghttp2/libnghttp2.la			\
+	wmem/libwmem.la				\
+	$(wslua_lib)				\
+	${top_builddir}/wiretap/libwiretap.la	\
+	${top_builddir}/wsutil/libwsutil.la	\
+	@SOCKET_LIBS@		\
+	@NSL_LIBS@		\
+	@C_ARES_LIBS@		\
+	@ADNS_LIBS@ 		\
+	@LIBGCRYPT_LIBS@	\
+	@LIBGNUTLS_LIBS@	\
+	@KRB5_LIBS@		\
+	@SSL_LIBS@		\
+	@LIBSMI_LDFLAGS@	\
+	@GEOIP_LIBS@		\
+	@GLIB_LIBS@		\
+	-lm
 
 libwireshark_la_DEPENDENCIES = \
-	libwireshark_generated.la compress/liblzxpress.la\
-	libwireshark_asmopt.la crypt/libairpdcap.la \
-	ftypes/libftypes.la dfilter/libdfilter.la dissectors/libdissectors.la \
-	dissectors/libdirtydissectors.la nghttp2/libnghttp2.la \
-	wmem/libwmem.la $(wslua_lib) \
-	${top_builddir}/wsutil/libwsutil.la \
+	libwireshark_generated.la		\
+	compress/liblzxpress.la			\
+	libwireshark_asmopt.la			\
+	crypt/libairpdcap.la			\
+	ftypes/libftypes.la			\
+	dfilter/libdfilter.la			\
+	dissectors/libdissectors.la		\
+	dissectors/libdirtydissectors.la	\
+	nghttp2/libnghttp2.la			\
+	wmem/libwmem.la				\
+	$(wslua_lib)				\
+	${top_builddir}/wsutil/libwsutil.la	\
 	${top_builddir}/wiretap/libwiretap.la
 
 EXTRA_PROGRAMS = reassemble_test tvbtest oids_test
@@ -181,7 +206,7 @@ update-sminmpec:
 	$(PERL) $(srcdir)/../tools/make-sminmpec.pl
 
 ps.c: print.ps $(top_srcdir)/tools/rdps.py
-	$(PYTHON) $(top_srcdir)/tools/rdps.py $(srcdir)/print.ps ps.c
+	$(AM_V_python)$(PYTHON) $(top_srcdir)/tools/rdps.py $(srcdir)/print.ps ps.c
 
 if HAVE_PLUGINS
 

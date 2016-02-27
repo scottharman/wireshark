@@ -390,6 +390,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ntb->setIconSize(QSize(24, 24));
 #endif // QT_MACEXTRAS_LIB
 
+    main_ui_->goToPacketLabel->setAttribute(Qt::WA_MacSmallSize, true);
     main_ui_->goToLineEdit->setAttribute(Qt::WA_MacSmallSize, true);
     main_ui_->goToGo->setAttribute(Qt::WA_MacSmallSize, true);
     main_ui_->goToCancel->setAttribute(Qt::WA_MacSmallSize, true);
@@ -652,10 +653,19 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(&capture_interfaces_dialog_, SIGNAL(getPoints(int,PointList*)),
             this->main_welcome_->getInterfaceTree(), SLOT(getPoints(int,PointList*)));
-    connect(&capture_interfaces_dialog_, SIGNAL(setSelectedInterfaces()),
-            this->main_welcome_->getInterfaceTree(), SLOT(setSelectedInterfaces()));
+    // Changes in interface selections or capture filters should be propagated
+    // to the main welcome screen where they will be applied to the global
+    // capture options.
     connect(&capture_interfaces_dialog_, SIGNAL(interfaceListChanged()),
             this->main_welcome_->getInterfaceTree(), SLOT(interfaceListChanged()));
+    connect(&capture_interfaces_dialog_, SIGNAL(interfacesChanged()),
+            this->main_welcome_, SLOT(interfaceSelected()));
+    connect(&capture_interfaces_dialog_, SIGNAL(interfacesChanged()),
+            this->main_welcome_->getInterfaceTree(), SLOT(updateSelectedInterfaces()));
+    connect(&capture_interfaces_dialog_, SIGNAL(interfacesChanged()),
+            this->main_welcome_->getInterfaceTree(), SLOT(updateToolTips()));
+    connect(&capture_interfaces_dialog_, SIGNAL(captureFilterTextEdited(QString)),
+            this->main_welcome_, SLOT(setCaptureFilterText(QString)));
 #endif
 
     /* Create plugin_if hooks */
@@ -1323,8 +1333,8 @@ void MainWindow::saveAsCaptureFile(capture_file *cf, bool must_support_comments,
         case CF_WRITE_OK:
             /* The save succeeded; we're done. */
             /* Save the directory name for future file dialogs. */
-            dirname = get_dirname(qstring_strdup(file_name));  /* Overwrites cf_name */
-            set_last_open_dir(dirname);
+            dirname = qstring_strdup(file_name);  /* Overwrites cf_name */
+            set_last_open_dir(get_dirname(dirname));
             g_free(dirname);
             /* If we discarded comments, redraw the packet list to reflect
                any packets that no longer have comments. */
@@ -1463,8 +1473,8 @@ void MainWindow::exportSelectedPackets() {
         case CF_WRITE_OK:
             /* The save succeeded; we're done. */
             /* Save the directory name for future file dialogs. */
-            dirname = get_dirname(qstring_strdup(file_name));  /* Overwrites cf_name */
-            set_last_open_dir(dirname);
+            dirname = qstring_strdup(file_name);  /* Overwrites cf_name */
+            set_last_open_dir(get_dirname(dirname));
             g_free(dirname);
             /* If we discarded comments, redraw the packet list to reflect
                any packets that no longer have comments. */
@@ -1901,7 +1911,7 @@ void MainWindow::setTitlebarForCaptureFile()
                                                      NULL);
             if (utf8_filename) {
                 QFileInfo fi(utf8_filename);
-                setWSWindowTitle(fi.fileName());
+                setWSWindowTitle(QString("[*]%1").arg(fi.fileName()));
                 setWindowFilePath(utf8_filename);
                 g_free(utf8_filename);
             } else {

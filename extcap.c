@@ -117,6 +117,16 @@ extcap_if_add(const gchar *ifname, const gchar *extcap)
 }
 
 static void
+extcap_free_info (gpointer data) {
+    extcap_info * info = (extcap_info *)data;
+
+    g_free (info->basename);
+    g_free (info->full_path);
+    g_free (info->version);
+    g_free (info);
+}
+
+static void
 extcap_tool_add(const gchar *extcap, const extcap_interface *interface)
 {
     char *toolname;
@@ -282,7 +292,7 @@ extcap_get_if_dlts(const gchar *ifname, char **err_str) {
     gint i;
     if_capabilities_t *caps = NULL;
 
-    if (ifname != NULL && err_str != NULL)
+    if (err_str != NULL)
         *err_str = NULL;
 
     if ( extcap_if_exists(ifname) )
@@ -291,8 +301,6 @@ extcap_get_if_dlts(const gchar *ifname, char **err_str) {
         argv[1] = g_strdup(EXTCAP_ARGUMENT_INTERFACE);
         argv[2] = g_strdup(ifname);
 
-        if (err_str)
-            *err_str = NULL;
         extcap_foreach(3, argv, dlt_cb, &caps, err_str, ifname);
 
         for (i = 0; i < 3; ++i)
@@ -333,14 +341,16 @@ static gboolean interfaces_cb(const gchar *extcap, const gchar *ifname _U_, gcha
             g_log(LOG_DOMAIN_CAPTURE, G_LOG_LEVEL_DEBUG, "  Extcap [%s] ", int_iter->call);
 
         if ( int_iter->if_type == EXTCAP_SENTENCE_INTERFACE ) {
-            if_info = g_new0(if_info_t, 1);
-            if_info->name = g_strdup(int_iter->call);
-            if_info->friendly_name = g_strdup(int_iter->display);
+            if (il != NULL) {
+                if_info = g_new0(if_info_t, 1);
+                if_info->name = g_strdup(int_iter->call);
+                if_info->friendly_name = g_strdup(int_iter->display);
 
-            if_info->type = IF_EXTCAP;
+                if_info->type = IF_EXTCAP;
 
-            if_info->extcap = g_strdup(extcap);
-            *il = g_list_append(*il, if_info);
+                if_info->extcap = g_strdup(extcap);
+                *il = g_list_append(*il, if_info);
+            }
 
             extcap_if_add(int_iter->call, extcap);
         }
@@ -369,32 +379,12 @@ if_info_compare(gconstpointer a, gconstpointer b)
     return comp;
 }
 
-GHashTable *
-extcap_tools_list(void) {
-    if ( tools == NULL || g_hash_table_size(tools) == 0 )
-        extcap_interface_list(NULL);
-
-    return tools;
-}
-
 static void
-extcap_free_info (gpointer data) {
-    extcap_info * info = (extcap_info *)data;
-
-    g_free (info->basename);
-    g_free (info->full_path);
-    g_free (info->version);
-    g_free (info);
-}
-
-GList *
-extcap_interface_list(char **err_str) {
+extcap_reload_interface_list(GList **retp, char **err_str) {
     gchar *argv;
-    /* gint i; */
-    GList *ret = NULL;
 
     if (err_str != NULL)
-    *err_str = NULL;
+        *err_str = NULL;
 
     /* ifaces is used as cache, do not destroy its contents when
      * returning or no extcap interfaces can be queried for options */
@@ -410,13 +400,39 @@ extcap_interface_list(char **err_str) {
 
     argv = g_strdup(EXTCAP_ARGUMENT_LIST_INTERFACES);
 
-    if (err_str)
-    *err_str = NULL;
-    extcap_foreach(1, &argv, interfaces_cb, &ret, err_str, NULL);
+    extcap_foreach(1, &argv, interfaces_cb, retp, err_str, NULL);
 
     g_free(argv);
+}
 
-    return g_list_sort ( ret, if_info_compare );
+GHashTable *
+extcap_tools_list(void) {
+    if ( tools == NULL || g_hash_table_size(tools) == 0 )
+        extcap_reload_interface_list(NULL, NULL);
+
+    return tools;
+}
+
+GList *
+append_extcap_interface_list(GList *list, char **err_str) {
+    GList *ret = NULL;
+    GList *entry;
+    void *data;
+
+    /* Update the extcap interfaces and get a list of their if_infos */
+    extcap_reload_interface_list(&ret, err_str);
+
+    /* Sort that list */
+    ret = g_list_sort(ret, if_info_compare);
+
+    /* Append the interfaces in that list to the list we're handed. */
+    while (ret != NULL) {
+        entry = g_list_first(ret);
+        data = entry->data;
+        ret = g_list_delete_link(ret, entry);
+        list = g_list_append(list, data);
+    }
+    return list;
 }
 
 static void extcap_free_arg_elem(gpointer data, gpointer user_data _U_) {
@@ -434,7 +450,7 @@ void extcap_register_preferences(void)
         return;
 
     if ( ! ifaces || g_hash_table_size(ifaces) == 0 )
-        extcap_interface_list(NULL);
+        extcap_reload_interface_list(NULL, NULL);
 
     interfaces = g_hash_table_get_keys(ifaces);
 
@@ -461,6 +477,34 @@ static void extcap_free_if_configuration(GList *list)
     g_list_free(list);
 }
 
+gchar * extcap_settings_key(const gchar * ifname, const gchar * setting)
+{
+    gchar * setting_nohyphen;
+    gchar * ifname_underscore;
+    gchar * ifname_lower;
+    gchar * key;
+    GRegex * regex = g_regex_new ("(?![a-zA-Z1-9_]).", (GRegexCompileFlags) 0, (GRegexMatchFlags) 0, NULL );
+
+    if (!regex)
+        return NULL;
+
+    setting_nohyphen =
+        g_regex_replace_literal(regex, setting, strlen(setting), 0,
+            "", (GRegexMatchFlags) 0, NULL );
+    ifname_underscore =
+        g_regex_replace_literal(regex, ifname, strlen(ifname), 0,
+            "_", (GRegexMatchFlags) 0, NULL );
+    ifname_lower = g_utf8_strdown(ifname_underscore, -1);
+    key = g_strconcat(ifname_lower, ".", setting_nohyphen, NULL);
+
+    g_free(setting_nohyphen);
+    g_free(ifname_underscore);
+    g_free(ifname_lower);
+    g_regex_unref(regex);
+
+    return key;
+}
+
 static gboolean search_cb(const gchar *extcap _U_, const gchar *ifname _U_, gchar *output, void *data,
         char **err_str _U_) {
     extcap_token_sentence *tokens = NULL;
@@ -482,37 +526,29 @@ static gboolean search_cb(const gchar *extcap _U_, const gchar *ifname _U_, gcha
     if ( dev_module ) {
         GList * walker = arguments;
 
-        GRegex * regex = g_regex_new ("[-]+", (GRegexCompileFlags) 0, (GRegexMatchFlags) 0, NULL );
-        if (regex) {
-            while ( walker != NULL ) {
-                extcap_arg * arg = (extcap_arg *)walker->data;
+        while ( walker != NULL ) {
+            extcap_arg * arg = (extcap_arg *)walker->data;
 
-                if ( arg->save ) {
-                    struct preference * pref = NULL;
+            if ( arg->save ) {
+                struct preference * pref = NULL;
+                gchar * pref_ifname = extcap_settings_key(ifname, arg->call);
 
-                    gchar * pref_name = g_regex_replace(regex, arg->call, strlen(arg->call), 0, "", (GRegexMatchFlags) 0, NULL );
-                    gchar * pref_ifname = g_strdup(g_strconcat(ifname, ".", pref_name, NULL));
+                if ( ( pref = prefs_find_preference(dev_module, pref_ifname) ) == NULL ) {
+                    /* Set an initial value */
+                    if ( ! arg->storeval && arg->default_complex )
+                        arg->storeval = g_strdup(arg->default_complex->_val);
 
-                    if ( ( pref = prefs_find_preference(dev_module, pref_ifname) ) == NULL ) {
-                        /* Set an initial value */
-                        if ( ! arg->storeval && arg->default_complex )
-                            arg->storeval = g_strdup(arg->default_complex->_val);
-
-                        prefs_register_string_preference(dev_module, g_strdup(pref_ifname),
-                                arg->display, arg->display, (const gchar **)&(arg->storeval));
-                    } else {
-                        /* Been here before, restore stored value */
-                        if (! arg->storeval && pref->varp.string)
-                            arg->storeval = g_strdup(*(pref->varp.string));
+                    prefs_register_string_preference(dev_module, g_strdup(pref_ifname),
+                            arg->display, arg->display, (const gchar **)&(arg->storeval));
+                } else {
+                    /* Been here before, restore stored value */
+                    if (! arg->storeval && pref->varp.string)
+                        arg->storeval = g_strdup(*(pref->varp.string));
                     }
-
-                    g_free(pref_name);
-                    g_free(pref_ifname);
-                }
-
-                walker = g_list_next(walker);
+                g_free(pref_ifname);
             }
-            g_regex_unref(regex);
+
+            walker = g_list_next(walker);
         }
     }
 
@@ -638,12 +674,6 @@ void extcap_cleanup(capture_options * capture_opts) {
                 "Extcap [%s] - Closing spawned PID: %d", interface_opts.name,
                 interface_opts.extcap_pid);
 
-        if (interface_opts.extcap_child_watch > 0)
-        {
-            g_source_remove(interface_opts.extcap_child_watch);
-            interface_opts.extcap_child_watch = 0;
-        }
-
         if (interface_opts.extcap_pid != INVALID_EXTCAP_PID)
         {
 #ifdef _WIN32
@@ -692,7 +722,9 @@ static void extcap_child_watch_cb(GPid pid, gint status _U_, gpointer user_data)
         if (interface_opts.extcap_pid == pid)
         {
             interface_opts.extcap_pid = INVALID_EXTCAP_PID;
+            g_source_remove(interface_opts.extcap_child_watch);
             interface_opts.extcap_child_watch = 0;
+
             capture_opts->ifaces = g_array_remove_index(capture_opts->ifaces, i);
             g_array_insert_val(capture_opts->ifaces, i, interface_opts);
             break;

@@ -326,8 +326,8 @@ static const struct {
 	{ 181,		WTAP_ENCAP_JUNIPER_CHDLC },
 	/* VOIP Frames prepended with meta-information */
 	{ 183,		WTAP_ENCAP_JUNIPER_VP },
-	/* raw USB packets */
-	{ 186,		WTAP_ENCAP_USB },
+	/* USB packets from FreeBSD's USB BPF tap */
+	{ 186,		WTAP_ENCAP_USB_FREEBSD },
 	/* Bluetooth HCI UART transport (part H:4) frames, like hcidump */
 	{ 187,		WTAP_ENCAP_BLUETOOTH_H4 },
 	/* IEEE 802.16 MAC Common Part Sublayer */
@@ -1539,8 +1539,6 @@ pcap_process_pseudo_header(FILE_T fh, int file_type, int wtap_encap,
 {
 	int phdr_len = 0;
 	guint size;
-
-	phdr->pkt_encap = wtap_encap;
 
 	switch (wtap_encap) {
 

@@ -32,6 +32,7 @@
 #include <ui_preference_editor_frame.h>
 
 #include "qt_ui_utils.h"
+#include <wsutil/utf8_entities.h>
 
 #include "wireshark_application.h"
 
@@ -55,6 +56,12 @@ PreferenceEditorFrame::PreferenceEditorFrame(QWidget *parent) :
     new_range_(NULL)
 {
     ui->setupUi(this);
+
+#ifdef Q_OS_MAC
+    foreach (QWidget *w, findChildren<QWidget *>()) {
+        w->setAttribute(Qt::WA_MacSmallSize, true);
+    }
+#endif
 }
 
 PreferenceEditorFrame::~PreferenceEditorFrame()
@@ -72,10 +79,10 @@ void PreferenceEditorFrame::editPreference(preference *pref, pref_module *module
         return;
     }
 
-    ui->modulePreferencesToolButton->setText(tr("Open %1 preferences").arg(module_->title));
+    ui->modulePreferencesToolButton->setText(tr("Open %1 preferences" UTF8_HORIZONTAL_ELLIPSIS).arg(module_->title));
 
     pref_stash(pref_, NULL);
-    ui->preferenceTitleLabel->setText(pref->title);
+    ui->preferenceTitleLabel->setText(QString("%1:").arg(pref->title));
 
     // Convert the pref description from plain text to rich text.
     QString description;
@@ -172,11 +179,11 @@ void PreferenceEditorFrame::rangeLineEditTextEdited(const QString &new_str)
 
 void PreferenceEditorFrame::on_modulePreferencesToolButton_clicked()
 {
-    on_buttonBox_rejected();
     if (module_) {
         QString module_name = module_->name;
         emit showProtocolPreferences(module_name);
     }
+    on_buttonBox_rejected();
 }
 
 void PreferenceEditorFrame::on_preferenceLineEdit_returnPressed()

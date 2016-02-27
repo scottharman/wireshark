@@ -406,13 +406,13 @@ static void ber_populate_list(const gchar *table_name _U_, decode_as_add_to_list
     ber_decode_as_foreach(decode_ber_add_to_list, &populate);
 }
 
-static gboolean ber_decode_as_reset(const char *name _U_, const gpointer pattern _U_)
+static gboolean ber_decode_as_reset(const char *name _U_, gconstpointer pattern _U_)
 {
     ber_decode_as(NULL);
     return FALSE;
 }
 
-static gboolean ber_decode_as_change(const char *name _U_, const gpointer pattern _U_, gpointer handle _U_, gchar* list_name)
+static gboolean ber_decode_as_change(const char *name _U_, gconstpointer pattern _U_, gpointer handle _U_, gchar* list_name)
 {
     ber_decode_as(list_name);
     return FALSE;
@@ -1421,7 +1421,10 @@ static void ber_defragment_cleanup(void) {
 }
 
 static int
-reassemble_octet_string(asn1_ctx_t *actx, proto_tree *tree, gint hf_id, tvbuff_t *tvb, int offset, guint32 con_len, gboolean ind, tvbuff_t **out_tvb)
+dissect_ber_constrained_octet_string_impl(gboolean implicit_tag, asn1_ctx_t *actx, proto_tree *tree, tvbuff_t *tvb, int offset, gint32 min_len, gint32 max_len, gint hf_id, tvbuff_t **out_tvb, guint nest_level);
+
+static int
+reassemble_octet_string(asn1_ctx_t *actx, proto_tree *tree, gint hf_id, tvbuff_t *tvb, int offset, guint32 con_len, gboolean ind, tvbuff_t **out_tvb, guint nest_level)
 {
     fragment_head *fd_head         = NULL;
     tvbuff_t      *next_tvb        = NULL;
@@ -1430,6 +1433,11 @@ reassemble_octet_string(asn1_ctx_t *actx, proto_tree *tree, gint hf_id, tvbuff_t
     int            start_offset    = offset;
     gboolean       fragment        = TRUE;
     gboolean       firstFragment   = TRUE;
+
+    if (nest_level > BER_MAX_NESTING) {
+        /* Assume that we have a malformed packet. */
+        THROW(ReportedBoundsError);
+    }
 
     /* so we need to consume octet strings for the given length */
 
@@ -1444,7 +1452,8 @@ reassemble_octet_string(asn1_ctx_t *actx, proto_tree *tree, gint hf_id, tvbuff_t
 
     while(!fd_head) {
 
-        offset = dissect_ber_octet_string(FALSE, actx, NULL, tvb, offset, hf_id, &next_tvb);
+        offset = dissect_ber_constrained_octet_string_impl(FALSE, actx, NULL,
+                tvb, offset, NO_BOUND, NO_BOUND, hf_id, &next_tvb, nest_level + 1);
 
         if (next_tvb == NULL) {
             /* Assume that we have a malformed packet. */
@@ -1520,6 +1529,11 @@ reassemble_octet_string(asn1_ctx_t *actx, proto_tree *tree, gint hf_id, tvbuff_t
 /* 8.7 Encoding of an octetstring value */
 int
 dissect_ber_constrained_octet_string(gboolean implicit_tag, asn1_ctx_t *actx, proto_tree *tree, tvbuff_t *tvb, int offset, gint32 min_len, gint32 max_len, gint hf_id, tvbuff_t **out_tvb) {
+  return dissect_ber_constrained_octet_string_impl(implicit_tag, actx, tree, tvb, offset, min_len, max_len, hf_id, out_tvb, 0);
+}
+
+static int
+dissect_ber_constrained_octet_string_impl(gboolean implicit_tag, asn1_ctx_t *actx, proto_tree *tree, tvbuff_t *tvb, int offset, gint32 min_len, gint32 max_len, gint hf_id, tvbuff_t **out_tvb, guint nest_level) {
     gint8       ber_class;
     gboolean    pc, ind;
     gint32      tag;
@@ -1613,7 +1627,7 @@ printf("OCTET STRING dissect_ber_octet_string(%s) entered\n", name);
 
     if (pc) {
         /* constructed */
-        end_offset = reassemble_octet_string(actx, tree, hf_id, tvb, offset, len, ind, out_tvb);
+        end_offset = reassemble_octet_string(actx, tree, hf_id, tvb, offset, len, ind, out_tvb, nest_level);
     } else {
         /* primitive */
         gint length_remaining;
@@ -2594,6 +2608,10 @@ printf("SET dissect_ber_set(%s) entered\n", name);
 
                 cset = set; /* reset to the beginning */
                 set_idx = 0;
+                /* If the set has no values, there is no point in trying again. */
+                if (!cset->func) {
+                    break;
+                }
             }
 
             if ((first_pass && ((cset->ber_class == ber_class) && (cset->tag == tag))) ||
@@ -4119,6 +4137,7 @@ dissect_ber_T_octet_aligned(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int of
 static int
 dissect_ber_OBJECT_IDENTIFIER(gboolean implicit_tag, tvbuff_t *tvb, int offset, asn1_ctx_t *actx, proto_tree *tree, int hf_index)
 {
+    DISSECTOR_ASSERT(actx);
     offset = dissect_ber_object_identifier_str(implicit_tag, actx, tree, tvb, offset, hf_index, &actx->external.direct_reference);
     actx->external.direct_ref_present = TRUE;
 
@@ -4128,6 +4147,7 @@ dissect_ber_OBJECT_IDENTIFIER(gboolean implicit_tag, tvbuff_t *tvb, int offset, 
 static int
 dissect_ber_ObjectDescriptor(gboolean implicit_tag _U_, tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx _U_, proto_tree *tree _U_, int hf_index _U_)
 {
+    DISSECTOR_ASSERT(actx);
     offset = dissect_ber_restricted_string(implicit_tag, BER_UNI_TAG_ObjectDescriptor,
                                            actx, tree, tvb, offset, hf_index,
                                            &actx->external.data_value_descriptor);

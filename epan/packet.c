@@ -471,12 +471,12 @@ dissect_record(epan_dissect_t *edt, int file_type_subtype,
 	edt->pi.fd            = fd;
 	edt->pi.phdr          = phdr;
 	edt->pi.pseudo_header = &phdr->pseudo_header;
-	edt->pi.dl_src.type   = AT_NONE;
-	edt->pi.dl_dst.type   = AT_NONE;
-	edt->pi.net_src.type  = AT_NONE;
-	edt->pi.net_dst.type  = AT_NONE;
-	edt->pi.src.type = AT_NONE;
-	edt->pi.dst.type = AT_NONE;
+	clear_address(&edt->pi.dl_src);
+	clear_address(&edt->pi.dl_dst);
+	clear_address(&edt->pi.net_src);
+	clear_address(&edt->pi.net_dst);
+	clear_address(&edt->pi.src);
+	clear_address(&edt->pi.dst);
 	edt->pi.ctype = CT_NONE;
 	edt->pi.noreassembly_reason = "";
 	edt->pi.ptype = PT_NONE;
@@ -537,12 +537,12 @@ dissect_file(epan_dissect_t *edt, struct wtap_pkthdr *phdr,
 	edt->pi.fd    = fd;
 	edt->pi.phdr  = phdr;
 	edt->pi.pseudo_header = &phdr->pseudo_header;
-	edt->pi.dl_src.type   = AT_NONE;
-	edt->pi.dl_dst.type   = AT_NONE;
-	edt->pi.net_src.type  = AT_NONE;
-	edt->pi.net_dst.type  = AT_NONE;
-	edt->pi.src.type = AT_NONE;
-	edt->pi.dst.type = AT_NONE;
+	clear_address(&edt->pi.dl_src);
+	clear_address(&edt->pi.dl_dst);
+	clear_address(&edt->pi.net_src);
+	clear_address(&edt->pi.net_dst);
+	clear_address(&edt->pi.src);
+	clear_address(&edt->pi.dst);
 	edt->pi.ctype = CT_NONE;
 	edt->pi.noreassembly_reason = "";
 	edt->pi.ptype = PT_NONE;
@@ -754,12 +754,12 @@ call_dissector_work_error(dissector_handle_t handle, tvbuff_t *tvb,
 
 	save_writable = col_get_writable(pinfo->cinfo);
 	col_set_writable(pinfo->cinfo, FALSE);
-	save_dl_src   = pinfo->dl_src;
-	save_dl_dst   = pinfo->dl_dst;
-	save_net_src  = pinfo->net_src;
-	save_net_dst  = pinfo->net_dst;
-	save_src      = pinfo->src;
-	save_dst      = pinfo->dst;
+	copy_address_shallow(&save_dl_src, &pinfo->dl_src);
+	copy_address_shallow(&save_dl_dst, &pinfo->dl_dst);
+	copy_address_shallow(&save_net_src, &pinfo->net_src);
+	copy_address_shallow(&save_net_dst, &pinfo->net_dst);
+	copy_address_shallow(&save_src, &pinfo->src);
+	copy_address_shallow(&save_dst, &pinfo->dst);
 
 	/* Dissect the contained packet. */
 	TRY {
@@ -770,12 +770,12 @@ call_dissector_work_error(dissector_handle_t handle, tvbuff_t *tvb,
 		* Restore the column writability and addresses.
 		*/
 		col_set_writable(pinfo->cinfo, save_writable);
-		pinfo->dl_src  = save_dl_src;
-		pinfo->dl_dst  = save_dl_dst;
-		pinfo->net_src = save_net_src;
-		pinfo->net_dst = save_net_dst;
-		pinfo->src     = save_src;
-		pinfo->dst     = save_dst;
+		copy_address_shallow(&pinfo->dl_src, &save_dl_src);
+		copy_address_shallow(&pinfo->dl_dst, &save_dl_dst);
+		copy_address_shallow(&pinfo->net_src, &save_net_src);
+		copy_address_shallow(&pinfo->net_dst, &save_net_dst);
+		copy_address_shallow(&pinfo->src, &save_src);
+		copy_address_shallow(&pinfo->dst, &save_dst);
 
 		/*
 		* Restore the current protocol, so any
@@ -812,12 +812,12 @@ call_dissector_work_error(dissector_handle_t handle, tvbuff_t *tvb,
 	ENDTRY;
 
 	col_set_writable(pinfo->cinfo, save_writable);
-	pinfo->dl_src  = save_dl_src;
-	pinfo->dl_dst  = save_dl_dst;
-	pinfo->net_src = save_net_src;
-	pinfo->net_dst = save_net_dst;
-	pinfo->src     = save_src;
-	pinfo->dst     = save_dst;
+	copy_address_shallow(&pinfo->dl_src, &save_dl_src);
+	copy_address_shallow(&pinfo->dl_dst, &save_dl_dst);
+	copy_address_shallow(&pinfo->net_src, &save_net_src);
+	copy_address_shallow(&pinfo->net_dst, &save_net_dst);
+	copy_address_shallow(&pinfo->src, &save_src);
+	copy_address_shallow(&pinfo->dst, &save_dst);
 	pinfo->want_pdu_tracking = 0;
 	return len;
 }
@@ -1980,14 +1980,14 @@ typedef struct dissector_foreach_table_info {
  * This is used if we directly process the hash table.
  */
 static void
-dissector_all_tables_foreach_table_func (gpointer key, const gpointer value, const gpointer user_data)
+dissector_all_tables_foreach_table_func (gpointer key, gpointer value, gpointer user_data)
 {
 	dissector_table_t               table;
 	dissector_foreach_table_info_t *info;
 
 	table = (dissector_table_t)value;
 	info  = (dissector_foreach_table_info_t *)user_data;
-	(*info->caller_func)((gchar*)key, table->ui_name, info->caller_data);
+	(*info->caller_func)((gchar *)key, table->ui_name, info->caller_data);
 }
 
 /*
@@ -2415,12 +2415,12 @@ typedef struct heur_dissector_foreach_table_info {
  * This is used if we directly process the hash table.
  */
 static void
-dissector_all_heur_tables_foreach_table_func (gpointer key, const gpointer value, const gpointer user_data)
+dissector_all_heur_tables_foreach_table_func (gpointer key, gpointer value, gpointer user_data)
 {
 	heur_dissector_foreach_table_info_t *info;
 
 	info = (heur_dissector_foreach_table_info_t *)user_data;
-    (*info->caller_func)((gchar*)key, (struct heur_dissector_list *)value, info->caller_data);
+    (*info->caller_func)((gchar *)key, (struct heur_dissector_list *)value, info->caller_data);
 }
 
 /*
@@ -2478,7 +2478,7 @@ display_heur_dissector_table_entries(const char *table_name,
 }
 
 static void
-dissector_dump_heur_decodes_display(const gchar *table_name, struct heur_dissector_list *listptr _U_, const gpointer user_data _U_)
+dissector_dump_heur_decodes_display(const gchar *table_name, struct heur_dissector_list *listptr _U_, gpointer user_data _U_)
 {
 	heur_dissector_table_foreach(table_name, display_heur_dissector_table_entries, NULL);
 }
@@ -2774,7 +2774,7 @@ void call_heur_dissector_direct(heur_dtbl_entry_t *heur_dtbl_entry, tvbuff_t *tv
 
 static void
 dissector_dump_decodes_display(const gchar *table_name,
-			       ftenum_t selector_type _U_, const gpointer key, const gpointer value,
+			       ftenum_t selector_type _U_, gpointer key, gpointer value,
 			       gpointer user_data _U_)
 {
 	guint32             selector       = GPOINTER_TO_UINT (key);

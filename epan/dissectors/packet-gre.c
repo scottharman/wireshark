@@ -133,6 +133,7 @@ const value_string gre_typevals[] = {
     { ETHERTYPE_RAW_FR,    "Frame Relay"},
     { ETHERTYPE_IPv6,      "IPv6" },
     { ETHERTYPE_MPLS,      "MPLS label switched packet" },
+    { ETHERTYPE_NSH,       "Network Service Header" },
     { ETHERTYPE_CDMA2000_A10_UBS,"CDMA2000 A10 Unstructured byte stream" },
     { ETHERTYPE_3GPP2,     "CDMA2000 A10 3GPP2 Packet" },
     { GRE_ARUBA_8200,      "ARUBA WLAN" },
@@ -343,7 +344,7 @@ dissect_gre(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
     switch (type) {
 
     case ETHERTYPE_PPP:
-        if (flags_and_ver & GRE_ACK)
+        if (flags_and_ver & GRE_VERSION)
             is_ppp = TRUE;
         break;
     case ETHERTYPE_3GPP2:

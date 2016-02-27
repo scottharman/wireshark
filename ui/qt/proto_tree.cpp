@@ -241,6 +241,8 @@ ProtoTree::ProtoTree(QWidget *parent) :
         submenu->addAction(action);
         copy_actions_ << action;
 
+        action = window()->findChild<QAction *>("actionContextShowPacketBytes");
+        ctx_menu_.addAction(action);
         action = window()->findChild<QAction *>("actionFileExportPacketBytes");
         ctx_menu_.addAction(action);
 
@@ -540,6 +542,19 @@ void ProtoTree::itemDoubleClick(QTreeWidgetItem *item, int) {
             QDesktopServices::openUrl(QUrl(url));
             g_free(url);
         }
+    }
+}
+
+void ProtoTree::selectField(field_info *fi)
+{
+    QTreeWidgetItemIterator iter(this);
+    while (*iter) {
+        if (fi == (*iter)->data(0, Qt::UserRole).value<field_info *>()) {
+            setCurrentItem(*iter);
+            scrollToItem(*iter);
+            break;
+        }
+        iter++;
     }
 }
 

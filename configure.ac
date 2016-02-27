@@ -16,9 +16,9 @@ CONFIG_ARGS="$*"
 AC_SUBST(CONFIG_ARGS)
 
 # Minimum autoconf version we require.
-AC_PREREQ(2.60)
+AC_PREREQ(2.64)
 # Variable expansion doesn't work in AC_PREREQ()
-AC_MIN_VERSION=2.60
+AC_MIN_VERSION=2.64
 AC_SUBST(AC_MIN_VERSION)
 
 dnl Make sure to keep ACLOCAL_AMFLAGS in Makefile.am and AC_CONFIG_MACRO_DIRS
@@ -538,6 +538,8 @@ AC_SEARCH_LIBS(floorl, m,
   ],
   FLOORL_LO="floorl.lo")
 AC_SUBST(FLOORL_LO)
+AC_SEARCH_LIBS(lrint, m,
+  [AC_DEFINE(HAVE_LRINT, 1, [Define if you have the 'lrint' function.])])
 
 
 #
@@ -680,29 +682,26 @@ linux*)
 		# was requested by the user.
 		#
 		if test x$libnl_version = "xany" -o x$libnl_version = "x3"; then
-			PKG_WIRESHARK_CHECK_SYSTEM_MODULES(LIBNL3, [libnl-route-3.0 >= 3.0 libnl-genl-3.0] >= 3.0, [have_libnl3=yes], [have_libnl3=no])
+			PKG_CHECK_EXISTS([libnl-3.0 libnl-route-3.0 libnl-genl-3.0], [have_libnl3=yes], [have_libnl3=no])
 		fi
 		if test x$libnl_version = "xany" -o x$libnl_version = "x2"; then
-			PKG_WIRESHARK_CHECK_SYSTEM_MODULES(LIBNL2, libnl-2.0 >= 2.0, [have_libnl2=yes], [have_libnl2=no])
+			PKG_CHECK_EXISTS([libnl-2.0], [have_libnl2=yes], [have_libnl2=no])
 		fi
 		if test x$libnl_version = "xany" -o x$libnl_version = "x1"; then
-			PKG_WIRESHARK_CHECK_SYSTEM_MODULES(LIBNL1, libnl-1 >= 1.0, [have_libnl1=yes], [have_libnl1=no])
+			PKG_CHECK_EXISTS([libnl-1], [have_libnl1=yes], [have_libnl1=no])
 		fi
 		if (test "${have_libnl3}" = "yes"); then
-			WS_CFLAGS="$WS_CFLAGS $LIBNL3_CFLAGS"
-			LIBS="$LIBS $LIBNL3_LIBS"
+			PKG_WIRESHARK_CHECK_SYSTEM_MODULES([LIBNL], [libnl-3.0 libnl-route-3.0 libnl-genl-3.0])
 			AC_DEFINE(HAVE_LIBNL, 1, [Enable libnl support])
 			AC_DEFINE(HAVE_LIBNL3, 1, [libnl version 3])
 			libnl_message="yes (v3)"
 		elif (test "${have_libnl2}" = "yes"); then
-			WS_CFLAGS="$WS_CFLAGS $LIBNL2_CFLAGS"
-			LIBS="$LIBS $LIBNL2_LIBS"
+			PKG_WIRESHARK_CHECK_SYSTEM_MODULES([LIBNL], [libnl-2.0])
 			AC_DEFINE(HAVE_LIBNL, 1, [Enable libnl support])
 			AC_DEFINE(HAVE_LIBNL2, 1, [libnl version 2])
 			libnl_message="yes (v2)"
 		elif (test "${have_libnl1}" = "yes"); then
-			WS_CFLAGS="$WS_CFLAGS $LIBNL1_CFLAGS"
-			LIBS="$LIBS $LIBNL1_LIBS"
+			PKG_WIRESHARK_CHECK_SYSTEM_MODULES([LIBNL], [libnl-1])
 			AC_DEFINE(HAVE_LIBNL, 1, [Enable libnl support])
 			AC_DEFINE(HAVE_LIBNL1, 1, [libnl version 1])
 			libnl_message="yes (v1)"
@@ -843,6 +842,16 @@ AC_SUBST(HAVE_OSX_PACKAGING)
 #
 AC_CHECK_PROG(have_sw_vers, sw_vers, "yes", "no")
 AM_CONDITIONAL(NOT_OS_X, test "x$have_sw_vers" = "xno")
+
+#
+# Check compiler vendor. For GCC this will be 'gnu' and for Clang 'clang'.
+#
+AX_COMPILER_VENDOR
+if test "x$CXX" != "x" ; then
+	AC_LANG_PUSH(C++)
+	AX_COMPILER_VENDOR
+	AC_LANG_POP
+fi
 
 #
 # Some compilers have to be told to fail when passed an unknown -W flag;
@@ -1040,7 +1049,12 @@ AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wshorten-64-to-32, C)
 # Clang only. Avoid "argument unused during compilation" warnings
 # (for example, when getting the -gsplit-dwarf option or
 # when combining -fwrapv with -fno-strict-overflow)
-AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Qunused-arguments)
+if test x"$ax_cv_c_compiler_vendor" = xclang; then
+	AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Qunused-arguments, C)
+fi
+if test x"$ax_cv_cxx_compiler_vendor" = xclang; then
+	AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Qunused-arguments, CXX)
+fi
 
 #
 # Use the faster pre gcc 4.5 floating point precision if available.
@@ -1433,7 +1447,7 @@ if test "x$ac_cv_enable_usr_local" = "xyes" ; then
 		# as various packages we use ("libpcap", "zlib", "adns")
 		# may have been installed under "/usr/local/include".
 		#
-		WS_CPPFLAGS="$WS_CPPFLAGS -I/usr/local/include"
+		AX_APPEND_FLAG([-I/usr/local/include], [WS_CPPFLAGS])
 
 		#
 		# Arrange that we search for libraries in "/usr/local/lib".
@@ -1536,28 +1550,46 @@ else
 	AC_MSG_RESULT(no)
 fi
 
-# Create DATAFILE_DIR #define for config.h
-datafiledir=$datadir/wireshark
-datafiledir=`(
-    test "x$prefix" = xNONE && prefix=$ac_default_prefix
-    test "x$exec_prefix" = xNONE && exec_prefix=${prefix}
-    # Ugly hack, but I don't see how this problem can be solved
-    # properly that DATAFILE_DIR had a value starting with
-    # "${prefix}/" instead of e.g. "/usr/local/"
-    eval eval echo "$datafiledir"
-)`
-AC_DEFINE_UNQUOTED(DATAFILE_DIR,"$datafiledir", [Directory for data])
+GLIB_MIN_VERSION=2.16.0
+AC_SUBST(GLIB_MIN_VERSION)
+# GLib checks; we require GLib $GLIB_MIN_VERSION or later, and require gmodule
+# support, as we need that for dynamically loading plugins.
+#
+# Release dates for GLib versions:
+# 2.14.0: 03 Aug 2007
+# 2.16.0: 10 Mar 2008
+# 2.18.0: 02 Sep 2008
+# 2.20.0: 13 Mar 2009
+# 2.22.0: 22 Sep 2009
+# 2.24.0: 28 Mar 2010
+# 2.26.0: 27 Sep 2010
+# 2.28.0: 08 Feb 2011
+# 2.30.0: 27 Sep 2011
+# 2.32.0: 24 Mar 2012
+# 2.34.0: 24 Sep 2012
+# 2.36.0: 25 Mar 2013
+# 2.38.0: 23 Sep 2013
+# 2.40.0: 24 Mar 2014
+# 2.42.0: 22 Sep 2014
+# 2.44.0: 23 Mar 2014
+# 2.46.0: 25 Sep 2015
 
-# Create DOC_DIR #define for config.h
-docdir=`(
-    test "x$prefix" = xNONE && prefix=$ac_default_prefix
-    test "x$exec_prefix" = xNONE && exec_prefix=${prefix}
-    # Ugly hack, but I don't see how this problem can be solved
-    # properly that DOC_DIR had a value starting with
-    # "${prefix}/" instead of e.g. "/usr/local/"
-    eval eval echo "$docdir"
-)`
-AC_DEFINE_UNQUOTED(DOC_DIR, "$docdir", [Directory for docs])
+PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GLIB],
+	[glib-2.0 >= $GLIB_MIN_VERSION gthread-2.0 >= $GLIB_MIN_VERSION gmodule-2.0 >= $GLIB_MIN_VERSION],
+	[],
+	[AC_MSG_ERROR([GLib $GLIB_MIN_VERSION or later not found.])])
+
+# Error out if a glib header other than a "top level" header
+#  (glib.h, glib-object.h, gio.h) or certain other headers( e.g.,gmodule.h)
+#  is used.
+AX_APPEND_FLAG([-DG_DISABLE_SINGLE_INCLUDES], [GLIB_CONFIG])
+
+# Error out on the usage of deprecated glib functions
+AX_APPEND_FLAG([-DG_DISABLE_DEPRECATED], [GLIB_CONFIG])
+
+GLIB_CFLAGS="$GLIB_CONFIG $GLIB_CFLAGS"
+AC_SUBST(GLIB_CFLAGS)
+AC_SUBST(GLIB_LIBS)
 
 GTK2_MIN_VERSION=2.12.0
 AC_SUBST(GTK2_MIN_VERSION)
@@ -1642,8 +1674,8 @@ if test "x$enable_wireshark" = "xyes"; then
 		#
 		AC_WIRESHARK_QT_CHECK($QT_MIN_VERSION, "$with_qt",
 		[
-			WS_CFLAGS="$WS_CFLAGS $Qt_CFLAGS"
-			WS_CXXFLAGS="$WS_CXXFLAGS $Qt_CFLAGS"
+			AC_SUBST(Qt_CFLAGS)
+			AC_SUBST(Qt_LIBS)
 			have_qt=yes
 			GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-qt"
 
@@ -1682,6 +1714,21 @@ if test "x$enable_wireshark" = "xyes"; then
 				;;
 			esac
 			AC_SUBST(Qt_LDFLAGS)
+			if test -z "$MOC_OPTIONS"
+			then
+				if test $qt_version -eq 5
+				then
+					MOC_OPTIONS="--no-notes"
+				elif test $qt_version -eq 4
+				then
+					qt_minor_version=`echo "$QT_VERSION" | cut -f2 -d.`
+					if test $qt_minor_version -ge 8
+					then
+						MOC_OPTIONS="-nn"
+					fi
+				fi
+			fi
+			AC_SUBST(MOC_OPTIONS)
 		],
 		[
 			case "$with_qt" in
@@ -1721,66 +1768,76 @@ if test "x$enable_wireshark" = "xyes"; then
 		#
 		# Make sure we have GTK+ 3.
 		#
-		AM_PATH_GTK_3_0(3.0.0,
-		[
-			WS_CFLAGS="$WS_CFLAGS $GTK_CFLAGS"
-			WS_CXXFLAGS="$WS_CXXFLAGS $GTK_CFLAGS"
-			have_gtk=yes
-			GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk3"
-		],
-		[AC_MSG_ERROR([GTK+ 3 is not available])])
+		PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GTK],
+			[gtk+-3.0 >= $GTK3_MIN_VERSION glib-2.0 >= $GLIB_MIN_VERSION gthread-2.0 >= $GLIB_MIN_VERSION gmodule-2.0 >= $GLIB_MIN_VERSION],
+			[
+				have_gtk=yes
+				GTK_VERSION=`$PKG_CONFIG --modversion gtk+-3.0`
+				GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk3"
+			],
+			[AC_MSG_ERROR([GTK+ 3 is not available])])
 	elif test "x$with_gtk2" = "xyes"; then
 		#
 		# GTK+ 3 wasn't specified, and GTK+ 2 was specified;
 		# make sure we have GTK+ 2.
 		#
-		AM_PATH_GTK_2_0($GTK2_MIN_VERSION,
-		[
-			WS_CFLAGS="$WS_CFLAGS $GTK_CFLAGS"
-			WS_CXXFLAGS="$WS_CXXFLAGS $GTK_CFLAGS"
-			have_gtk=yes
-			GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk2"
-		],
-		[AC_MSG_ERROR([GTK+ 2 is not available])])
+		PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GTK],
+			[gtk+-2.0 >= $GTK2_MIN_VERSION glib-2.0 >= $GLIB_MIN_VERSION gthread-2.0 >= $GLIB_MIN_VERSION gmodule-2.0 >= $GLIB_MIN_VERSION],
+			[
+				have_gtk=yes
+				GTK_VERSION=`$PKG_CONFIG --modversion gtk+-2.0`
+				GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk2"
+			],
+			[AC_MSG_ERROR([GTK+ 2 is not available])])
+	fi
+
+	if test "$have_gtk" = "yes" ; then
+		# If we have GTK then add flags for it.
+		#
+		# GLib flags first
+		#
+		GTK_CONFIG="$GLIB_CONFIG"
+
+		gtk_config_major_version=`echo $GTK_VERSION | cut -d. -f1`
+		gtk_config_minor_version=`echo $GTK_VERSION | cut -d. -f2`
+
+		AX_APPEND_FLAG([-DGDK_DISABLE_DEPRECATED], [GTK_CONFIG])
+		if test \( $gtk_config_major_version -eq 3 -a $gtk_config_minor_version -ge 10 \) ; then
+			## Allow use of deprecated & disable deprecated warnings if Gtk >= 3.10;
+			##  The deprecations in Gtk 3.10 will not be fixed ...
+			AX_APPEND_FLAG([-DGDK_DISABLE_DEPRECATION_WARNINGS], [GTK_CONFIG])
+		else
+			AX_APPEND_FLAG([-DGTK_DISABLE_DEPRECATED], [GTK_CONFIG])
+		fi
+		AX_APPEND_FLAG([-DGTK_DISABLE_SINGLE_INCLUDES], [GTK_CONFIG])
+		if test ! \( $gtk_config_major_version -eq 2 -a $gtk_config_minor_version -lt 20 \) ; then
+			# Enable GSEAL when building with GTK > 2.20
+			# (Versions prior to 2.22 lacked some necessary accessors.)
+			AX_APPEND_FLAG([-DGSEAL_ENABLE], [GTK_CONFIG])
+		fi
+
+		GTK_CFLAGS="$GTK_CONFIG $GTK_CFLAGS"
 	fi
 fi
+
+AC_SUBST(GTK_CFLAGS)
+AC_SUBST(GTK_LIBS)
 AC_SUBST(GUI_CONFIGURE_FLAGS)
 
-GLIB_MIN_VERSION=2.16.0
-AC_SUBST(GLIB_MIN_VERSION)
-# GLib checks; we require GLib $GLIB_MIN_VERSION or later, and require gmodule
-# support, as we need that for dynamically loading plugins.
-# If we found GTK+, this doesn't add GLIB_CFLAGS to CFLAGS, because
-# AM_PATH_GTK will add GTK_CFLAGS to CFLAGS, and GTK_CFLAGS is a
-# superset of GLIB_CFLAGS.  If we didn't find GTK+, it does add
-# GLIB_CFLAGS to CFLAGS.
-# However, this means that both @GLIB_LIBS@ and @GTK_LIBS@ will be
-# set when generating the Makefile, so we can make programs that require
-# only GLib link with @GLIB_LIBS@ and make programs that require GTK+
-# link with @GTK_LIBS@ (which includes @GLIB_LIBS@).
-# We don't add $GLIB_LIBS to LIBS, because we don't want to force all
-# programs to be built with GLib.
-#
-# Release dates for GLib versions:
-# 2.14.0: 03 Aug 2007
-# 2.16.0: 10 Mar 2008
-# 2.18.0: 02 Sep 2008
-# 2.20.0: 13 Mar 2009
-# 2.22.0: 22 Sep 2009
-# 2.24.0: 28 Mar 2010
-# 2.26.0: 27 Sep 2010
-# 2.28.0: 08 Feb 2011
-# 2.30.0: 27 Sep 2011
-# 2.32.0: 24 Mar 2012
-# 2.34.0: 24 Sep 2012
-# 2.36.0: 25 Mar 2013
-# 2.38.0: 23 Sep 2013
-# 2.40.0: 24 Mar 2014
-# 2.42.0: 22 Sep 2014
-# 2.44.0: 23 Mar 2014
-# 2.46.0: 25 Sep 2015
+# Check for GTK GUI support for GResource pixbufs
+have_gresource_pixbuf=no
+if test "x$have_gtk" = "xyes"; then
+	AC_MSG_CHECKING(whether GDK-Pixbuf can load data using GResource)
+	PKG_CHECK_EXISTS([gio-2.0 >= 2.32 gdk-pixbuf-2.0 >= 2.26],
+	  [
+	   AC_MSG_RESULT(yes)
+	   AC_DEFINE(HAVE_GDK_GRESOURCE, 1, [Defined if GResource is supported])
+	   have_gresource_pixbuf=yes
+	  ],
+	  [AC_MSG_RESULT(no)])
+fi
+AM_CONDITIONAL(HAVE_GRESOURCE_PIXBUF, test "x$have_gresource_pixbuf" = "xyes")
 
-use_glib_cflags="true"
 if test "$have_gtk" = "yes" -a "$have_qt" = "yes" ; then
 	# We have both GTK and Qt and thus will be building both wireshark
 	# and wireshark-gtk.
@@ -1825,53 +1882,6 @@ if test "$have_gtk" = "no" -a "$have_qt" = "no" ; then
 	wireshark_bin=""
 	wireshark_man=""
 fi
-
-if test "$have_gtk" = "yes" ; then
-	# If we have GTK then add flags for it.
-
-	WS_CPPFLAGS="-DGDK_DISABLE_DEPRECATED $WS_CPPFLAGS"
-	if test \( $gtk_config_major_version -eq 3 -a $gtk_config_minor_version -ge 10 \) ; then
-		## Allow use of deprecated & disable deprecated warnings if Gtk >= 3.10;
-		##  The deprecations in Gtk 3.10 will not be fixed ...
-		WS_CPPFLAGS="-DGDK_DISABLE_DEPRECATION_WARNINGS $WS_CPPFLAGS"
-	else
-		WS_CPPFLAGS="-DGTK_DISABLE_DEPRECATED $WS_CPPFLAGS"
-	fi
-	WS_CPPFLAGS="-DGTK_DISABLE_SINGLE_INCLUDES $WS_CPPFLAGS"
-	if test ! \( $gtk_config_major_version -eq 2 -a $gtk_config_minor_version -lt 20 \) ; then
-		# Enable GSEAL when building with GTK > 2.20
-		# (Versions prior to 2.22 lacked some necessary accessors.)
-		WS_CPPFLAGS="-DGSEAL_ENABLE $WS_CPPFLAGS"
-	fi
-fi
-
-# XXX - Is this really necessary?  When we build with both Gtk+ and Qt it works...
-if test "$use_glib_cflags" = "true"; then
-	# Use GLIB_CFLAGS
-	AM_PATH_GLIB_2_0($GLIB_MIN_VERSION,
-	[
-		WS_CFLAGS="$WS_CFLAGS $GLIB_CFLAGS"
-		WS_CXXFLAGS="$WS_CXXFLAGS $GLIB_CFLAGS"
-	], AC_MSG_ERROR(GLib $GLIB_MIN_VERSION or later distribution not found.), gthread gmodule)
-else
-	# Don't use GLIB_CFLAGS
-	AM_PATH_GLIB_2_0($GLIB_MIN_VERSION, , AC_MSG_ERROR(GLib $GLIB_MIN_VERSION or later distribution not found.), gthread gmodule)
-fi
-
-# Check for GResource support
-PKG_CHECK_EXISTS([gio-2.0 >= 2.32 gdk-pixbuf-2.0 >= 2.26], [have_gresource=yes], [have_gresource=no])
-AM_CONDITIONAL(HAVE_GRESOURCE, test "x$have_gresource" = "xyes")
-if test "x$have_gresource" = "xyes"; then
-	AC_DEFINE(HAVE_GRESOURCE, 1, [Defined if GLib GResource is supported])
-fi
-
-# Error out if a glib header other than a "top level" header
-#  (glib.h, glib-object.h, gio.h) or certain other headers( e.g.,gmodule.h)
-#  is used.
-WS_CPPFLAGS="-DG_DISABLE_SINGLE_INCLUDES $WS_CPPFLAGS"
-
-# Error out on the usage of deprecated glib functions
-WS_CPPFLAGS="-DG_DISABLE_DEPRECATED $WS_CPPFLAGS"
 
 #
 # Check whether GLib modules are supported, to determine whether we
@@ -2899,7 +2909,7 @@ AC_CHECK_FUNCS(mkstemp mkdtemp)
 AC_SEARCH_LIBS(inet_aton, [socket nsl],
   [
     INET_ATON_LO=""
-    AC_DEFINE(HAVE_INET_ATON, 0, [Define to 1 if you have the inet_aton function.])
+    AC_DEFINE(HAVE_INET_ATON, 1, [Define to 1 if you have the inet_aton function.])
   ],
   INET_ATON_LO="inet_aton.lo")
 AC_SUBST(INET_ATON_LO)
@@ -2928,6 +2938,8 @@ have_inet_pton=no)
 if test "$have_inet_pton" = no; then
   INET_PTON_LO="inet_pton.lo"
 else
+  AC_DEFINE(HAVE_INET_PTON, 1,
+    [Define to 1 if you have the `inet_pton' function.])
   INET_PTON_LO=""
 fi
 AM_CONDITIONAL(NEED_INET_PTON_LO, test "x$have_inet_pton" = "xno")
@@ -2957,9 +2969,7 @@ extern const char *inet_ntop(int, const void *, char *, socklen_t);],, [
       [Define if inet_ntop() prototype exists])], [
       AC_MSG_RESULT(no)])])
   INET_NTOP_LO=""], [
-  INET_NTOP_LO="inet_ntop.lo"
-  AC_DEFINE(NEED_INET_V6DEFS_H, 1,
-  [Define if inet/v6defs.h needs to be included])])
+  INET_NTOP_LO="inet_ntop.lo"])
 AM_CONDITIONAL(NEED_INET_NTOP_LO, test "x$INET_NTOP_LO" != "x")
 AC_SUBST(INET_NTOP_LO)
 
@@ -3004,6 +3014,7 @@ if test "x$with_sbc" != "xno"; then
 else
     have_sbc=no
 fi
+AM_CONDITIONAL(HAVE_SBC, test "x$have_sbc" = "xyes")
 
 dnl
 dnl check whether plugins should be enabled and, if they should be,
@@ -3029,7 +3040,6 @@ then
   AC_DEFINE(HAVE_PLUGINS, 1, [Define if plugins are enabled])
 fi
 AC_SUBST(plugindir)
-WS_CPPFLAGS="$WS_CPPFLAGS '-DPLUGIN_INSTALL_DIR=\"\$(plugindir)\"'"
 
 #
 # The plugin dissectors reside in ./plugins/PROTO/
@@ -3037,9 +3047,12 @@ WS_CPPFLAGS="$WS_CPPFLAGS '-DPLUGIN_INSTALL_DIR=\"\$(plugindir)\"'"
 PLUGIN_LIBS=""
 AC_SUBST(PLUGIN_LIBS)
 
-
-dnl Use extcap by default
-extcapdir='${datadir}/wireshark/extcap/'
+dnl
+dnl check whether extcap programs should be enabled and, if they should be,
+dnl check for extcap directory - stolen from Amanda's configure.ac
+dnl
+dnl we don't wish to expand ${libdir} yet
+extcapdir="\${libdir}/wireshark/extcap"
 AC_ARG_WITH(extcap,
   AC_HELP_STRING( [--with-extcap@<:@=DIR@:>@],
 		  [use extcap for external capture sources (installed in DIR, if supplied) @<:@default=yes, if possible@:>@]),
@@ -3059,7 +3072,6 @@ AM_CONDITIONAL(HAVE_EXTCAP, test "x$have_extcap" = "xyes")
 if test "x$have_extcap" = "xyes"
 then
   AC_DEFINE(HAVE_EXTCAP, 1, [Define if external capture sources should be enabled])
-  AC_DEFINE_UNQUOTED(EXTCAP_DIR,"$extcapdir", [Directory for extcap plugins])
 fi
 AC_SUBST(extcapdir)
 
@@ -3267,6 +3279,7 @@ AC_OUTPUT(
   epan/nghttp2/Makefile
   epan/wmem/Makefile
   epan/wslua/Makefile
+  extcap/Makefile
   codecs/Makefile
   ui/Makefile
   ui/doxygen.cfg
@@ -3303,6 +3316,8 @@ AC_OUTPUT(
   plugins/wimax/Makefile
   plugins/wimaxasncp/Makefile
   plugins/wimaxmacphy/Makefile
+  randpkt_core/doxygen.cfg
+  randpkt_core/Makefile
   tools/Makefile
   tools/lemon/Makefile
   wiretap/Makefile
@@ -3316,11 +3331,7 @@ dnl AC_CONFIG_FILES([tools/setuid-root.pl], [chmod +x tools/setuid-root.pl])
 # Pretty messages
 
 if test "x$have_gtk" = "xyes"; then
-	if test "x$with_gtk3" = "xyes"; then
-		gtk_lib_message=" (with GTK+ 3"
-	else
-		gtk_lib_message=" (with GTK+ 2"
-	fi
+	gtk_lib_message=" (with GTK+ v$GTK_VERSION"
 	if test "x$have_ige_mac" = "xyes"; then
 		gtk_lib_message="$gtk_lib_message and OS X integration)"
 	else
@@ -3330,7 +3341,7 @@ fi
 
 if test "x$have_qt" = "xyes" ; then
 	enable_wireshark_qt="yes"
-	qt_lib_message=" (with Qt $qt_version)"
+	qt_lib_message=" (with Qt$qt_version v$QT_VERSION)"
 else
 	enable_wireshark_qt="no"
 fi
@@ -3436,6 +3447,17 @@ else
 fi
 
 echo ""
+echo "  CPPFLAGS: $WS_CPPFLAGS $CPPFLAGS"
+echo ""
+echo "  CFLAGS: $WS_CFLAGS $CFLAGS"
+echo ""
+echo "  CXXFLAGS: $WS_CXXFLAGS $CXXFLAGS"
+echo ""
+echo "  LDFLAGS: $WS_LDFLAGS $LDFLAGS"
+echo ""
+echo "  LIBS: $LIBS"
+
+echo ""
 echo "The Wireshark package has been configured with the following options."
 echo "                    Build wireshark : $enable_wireshark_qt$qt_lib_message"
 echo "                Build wireshark-gtk : $have_gtk""$gtk_lib_message"
@@ -3481,4 +3503,4 @@ echo "                 Use libssh library : $libssh_message"
 echo "            Have ssh_userauth_agent : $ssh_userauth_agent_message"
 echo "                     Use nl library : $libnl_message"
 echo "              Use SBC codec library : $have_sbc"
-#echo "                      Use GResource : $have_gresource"
+#echo "       Use GDK-Pixbuf with GResource: $have_gresource_pixbuf"

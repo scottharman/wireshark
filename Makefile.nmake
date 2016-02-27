@@ -39,7 +39,7 @@ LDFLAGS = /NOLOGO /INCREMENTAL:NO $(LOCAL_LDFLAGS)
 # We use GENERATED_CFLAGS to get around flex's non-LLP64-compliant output
 GENERATED_CFLAGS=\
 	$(STANDARD_CFLAGS) \
-	/I.  /Iwiretap $(GLIB_CFLAGS) \
+	/I. $(GLIB_CFLAGS) \
 	$(ZLIB_CFLAGS) /I$(PCAP_DIR)\include $(AIRPCAP_CFLAGS) \
 	$(C_ARES_CFLAGS) $(ADNS_CFLAGS) $(GNUTLS_CFLAGS) \
 	$(SMI_CFLAGS) $(GEOIP_CFLAGS) $(LIBSSH_CFLAGS) $(WINSPARKLE_CFLAGS)
@@ -68,9 +68,6 @@ dftest_OBJECTS = $(dftest_SOURCES:.c=.obj)
 dumpcap_OBJECTS = $(dumpcap_SOURCES:.c=.obj)
 randpkt_OBJECTS = $(randpkt_SOURCES:.c=.obj)
 reordercap_OBJECTS = $(reordercap_SOURCES:.c=.obj)
-# this does not work because source file is in a subfolder of this makefile
-# and we end up recompiling systematically androiddump.c
-#androiddump_OBJECTS = $(androiddump_SOURCES:.c=.obj)
 
 #
 # psapi.lib see http://msdn.microsoft.com/en-us/library/windows/desktop/ms683219(v=vs.85).aspx
@@ -177,21 +174,6 @@ text2pcap_LIBS= \
 	wsutil\libwsutil.lib \
 	$(GLIB_LIBS)
 
-androiddump_LIBS= wiretap\wiretap-$(WTAP_VERSION).lib \
-	wsock32.lib user32.lib \
-	wsutil\libwsutil.lib \
-	$(GLIB_LIBS)
-
-sshdump_LIBS= wiretap\wiretap-$(WTAP_VERSION).lib \
-	wsock32.lib user32.lib \
-	wsutil\libwsutil.lib \
-	$(LIBSSH_LIBS) \
-
-randpktdump_LIBS= wiretap\wiretap-$(WTAP_VERSION).lib \
-	wsock32.lib user32.lib \
-	wsutil\libwsutil.lib \
-	$(GLIB_LIBS)
-
 dumpcap_LIBS= \
 	wsock32.lib user32.lib \
 	caputils\libcaputils.lib \
@@ -215,19 +197,15 @@ dftest_LIBS=  wiretap\wiretap-$(WTAP_VERSION).lib \
 	$(SMI_LIBS)
 !ENDIF
 
-randpkt_LIBS= wiretap\wiretap-$(WTAP_VERSION).lib \
+randpkt_LIBS= randpkt_core\librandpkt_core.lib \
+	wiretap\wiretap-$(WTAP_VERSION).lib \
 	user32.lib \
 	wsutil\libwsutil.lib \
 	$(GLIB_LIBS)
 
 EXECUTABLES=$(PROGRAM_NAME_GTK).exe tshark.exe tfshark.exe rawshark.exe \
 	capinfos.exe captype.exe editcap.exe mergecap.exe text2pcap.exe \
-	randpkt.exe reordercap.exe dumpcap.exe androiddump.exe randpktdump.exe \
-	dftest.exe
-
-!IFDEF LIBSSH_DIR
-EXECUTABLES += sshdump.exe
-!ENDIF
+	randpkt.exe reordercap.exe dumpcap.exe dftest.exe
 
 !IFDEF QT5_BASE_DIR
 EXECUTABLES=$(EXECUTABLES) $(PROGRAM_NAME).exe
@@ -240,7 +218,7 @@ RESOURCES=image\wireshark.res image\file_dlg_win32.res \
 	image\rawshark.res image\reordercap.res image\libwsutil.res
 
 
-all: $(LIBS_CHECK) config.h ui\qt\config.pri tools image $(C_ARES_DLL) $(ADNS_DLL) $(ZLIB_DLL) wsutil codecs wiretap epan $(EXECUTABLES) wireshark.bsc $(RESOURCES) help install-all
+all: $(LIBS_CHECK) config.h ui\qt\config.pri tools image $(C_ARES_DLL) $(ADNS_DLL) $(ZLIB_DLL) wsutil codecs wiretap epan randpkt_core extcap $(EXECUTABLES) wireshark.bsc $(RESOURCES) help install-all
 
 !IFDEF MAKENSIS
 packaging: all
@@ -305,6 +283,7 @@ wireshark.bsc: \
 	plugins\wimax\*.sbr		\
 	plugins\wimaxasncp\*.sbr	\
 	plugins\wimaxmacphy\*.sbr	\
+	randpkt_core\*.sbr		\
 	ui\*.sbr			\
 	ui\cli\*.sbr			\
 	ui\gtk\*.sbr			\
@@ -436,42 +415,13 @@ dftest.exe	: $(dftest_OBJECTS) epan ui
 	mt.exe -nologo -manifest "dftest.exe.manifest" -outputresource:dftest.exe;1
 !ENDIF
 
-randpkt.exe	: $(randpkt_OBJECTS)
+randpkt.exe	: $(randpkt_OBJECTS) randpkt_core
 	@echo Linking $@
 	$(LINK) @<<
 		/OUT:randpkt.exe $(conflags) $(conlibsdll) $(LDFLAGS) $(randpkt_LIBS) $(randpkt_OBJECTS)
 <<
 !IFDEF MANIFEST_INFO_REQUIRED
 	mt.exe -nologo -manifest "randpkt.exe.manifest" -outputresource:randpkt.exe;1
-!ENDIF
-
-androiddump.exe	: $(LIBS_CHECK) config.h androiddump.obj wsutil\libwsutil.lib wiretap\wiretap-$(WTAP_VERSION).lib
-	@echo Linking $@
-	$(LINK) @<<
-		/OUT:androiddump.exe $(conflags) $(conlibsdll) $(LDFLAGS) /SUBSYSTEM:WINDOWS androiddump.obj $(androiddump_LIBS)
-<<
-!IFDEF MANIFEST_INFO_REQUIRED
-	mt.exe -nologo -manifest "androiddump.exe.manifest" -outputresource:androiddump.exe;1
-!ENDIF
-
-randpktdump.exe	: $(LIBS_CHECK) config.h randpktdump.obj randpkt-core.obj wsutil\libwsutil.lib wiretap\wiretap-$(WTAP_VERSION).lib
-	@echo Linking $@
-	$(LINK) @<<
-		/OUT:randpktdump.exe $(conflags) $(conlibsdll) $(LDFLAGS) /SUBSYSTEM:WINDOWS randpktdump.obj randpkt-core.obj $(randpktdump_LIBS)
-<<
-!IFDEF MANIFEST_INFO_REQUIRED
-	mt.exe -nologo -manifest "randpktdump.exe.manifest" -outputresource:randpktdump.exe;1
-!ENDIF
-
-!IFDEF LIBSSH_DIR
-sshdump.exe	: $(LIBS_CHECK) config.h sshdump.obj wsutil\libwsutil.lib wiretap\wiretap-$(WTAP_VERSION).lib
-	@echo Linking $@
-	$(LINK) @<<
-		/OUT:sshdump.exe $(conflags) $(conlibsdll) $(LDFLAGS) /SUBSYSTEM:WINDOWS sshdump.obj $(sshdump_LIBS)
-<<
-!IFDEF MANIFEST_INFO_REQUIRED
-	mt.exe -nologo -manifest "sshdump.exe.manifest" -outputresource:sshdump.exe;1
-!ENDIF
 !ENDIF
 
 dumpcap.exe	: $(LIBS_CHECK) config.h $(dumpcap_OBJECTS) caputils wsutil\libwsutil.lib image\dumpcap.res
@@ -607,15 +557,6 @@ text2pcap-scanner.c : text2pcap-scanner.l
 text2pcap-scanner.obj : text2pcap-scanner.c
 	$(CC) $(GENERATED_CFLAGS) -Fd.\ -c $?
 
-androiddump.obj : extcap/androiddump.c
-	$(CC) $(CFLAGS) -Fd.\ -c $?
-
-sshdump.obj : extcap/sshdump.c
-	$(CC) $(CFLAGS) -Fd.\ -c $?
-
-randpktdump.obj : extcap/randpktdump.c randpkt-core.c
-	$(CC) $(CFLAGS) -Fd.\ -c $?
-
 test-programs:
 	cd epan
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake test-programs
@@ -624,7 +565,6 @@ test-programs:
 clean-local:
 	rm -f $(wireshark_gtk_OBJECTS) $(tshark_OBJECTS) $(tfshark_OBJECTS) $(dumpcap_OBJECTS) $(rawshark_OBJECTS) \
 		$(EXECUTABLES) *.nativecodeanalysis.xml *.pdb *.sbr *.exe.manifest \
-		androiddump.obj sshdump.obj randpktdump.obj \
 		capinfos.obj capinfos.exp capinfos.lib \
 		captype.obj captype.exp captype.lib \
 		editcap.obj editcap.exp editcap.lib \
@@ -632,7 +572,7 @@ clean-local:
 		reordercap.obj nio-ie5.obj update.obj \
 		text2pcap-scanner.obj text2pcap-scanner.c \
 		config.h ps.c $(LIBS_CHECK) \
-		dftest.obj dftest.exe randpkt.obj randpkt-core.obj randpkt.exe \
+		dftest.obj dftest.exe randpkt.obj randpkt.exe \
 		doxygen.cfg \
 		$(RESOURCES) libwireshark.dll wiretap-$(WTAP_VERSION).dll \
 		libwscodecs.lib libwsutil.dll \
@@ -650,6 +590,10 @@ clean: clean-local
 	cd ../capchild
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
 	cd ../caputils
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ../randpkt_core
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
+	cd ../extcap
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
 	cd ../codecs
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake clean
@@ -707,6 +651,10 @@ distclean: distclean-local
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
 	cd ../caputils
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ../randpkt_core
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
+	cd ../extcap
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
 	cd ../codecs
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake distclean
 	cd ../ui
@@ -755,6 +703,10 @@ maintainer-clean: maintainer-clean-local
 	cd ../capchild
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
 	cd ../caputils
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ../randpkt_core
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
+	cd ../extcap
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
 	cd ../codecs
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake maintainer-clean
@@ -872,6 +824,16 @@ capchild:: help config.h version.h doxygen
 caputils:: help config.h version.h doxygen
 	cd caputils
 	$(MAKE) /$(MAKEFLAGS) /f Makefile.nmake libcaputils.lib
+	cd ..
+
+randpkt_core:: help config.h version.h doxygen
+	cd randpkt_core
+	$(MAKE) /$(MAKEFLAGS) /f Makefile.nmake librandpkt_core.lib
+	cd ..
+
+extcap::
+	cd extcap
+	$(MAKE) /$(MAKEFLAGS) /f Makefile.nmake all
 	cd ..
 
 codecs::
@@ -1285,19 +1247,19 @@ install-generated-files: doc
 	if exist $(PROGRAM_NAME_GTK).bsc xcopy $(PROGRAM_NAME_GTK).bsc $(INSTALL_DIR) /d
 	if exist ".\docbook\user-guide.chm" xcopy ".\docbook\user-guide.chm" $(INSTALL_DIR) /d
 	if not exist $(INSTALL_DIR)\extcap mkdir $(INSTALL_DIR)\extcap
-	if exist androiddump.exe xcopy androiddump.exe $(INSTALL_DIR)\extcap /d
-	if exist androiddump.pdb xcopy androiddump.pdb $(INSTALL_DIR)\extcap /d
-	if exist sshdump.exe xcopy sshdump.exe $(INSTALL_DIR)\extcap /d
-	if exist sshdump.pdb xcopy sshdump.pdb $(INSTALL_DIR)\extcap /d
-	if exist randpktdump.exe xcopy randpktdump.exe $(INSTALL_DIR)\extcap /d
-	if exist randpktdump.pdb xcopy randpktdump.pdb $(INSTALL_DIR)\extcap /d
+	if exist ".\extcap\androiddump.exe" xcopy ".\extcap\androiddump.exe" $(INSTALL_DIR)\extcap /d
+	if exist ".\extcap\androiddump.pdb" xcopy ".\extcap\androiddump.pdb" $(INSTALL_DIR)\extcap /d
+	if exist ".\extcap\randpktdump.exe" xcopy ".\extcap\randpktdump.exe" $(INSTALL_DIR)\extcap /d
+	if exist ".\extcap\randpktdump.pdb" xcopy ".\extcap\randpktdump.pdb" $(INSTALL_DIR)\extcap /d
+	if exist ".\extcap\sshdump.exe" xcopy ".\extcap\sshdump.exe" $(INSTALL_DIR)\extcap /d
+	if exist ".\extcap\sshdump.pdb" xcopy ".\extcap\sshdump.pdb" $(INSTALL_DIR)\extcap /d
 	if not exist $(INSTALL_DIR_QT)\extcap mkdir $(INSTALL_DIR_QT)\extcap
-	if exist androiddump.exe xcopy androiddump.exe $(INSTALL_DIR_QT)\extcap /d
-	if exist androiddump.pdb xcopy androiddump.pdb $(INSTALL_DIR_QT)\extcap /d
-	if exist sshdump.exe xcopy sshdump.exe $(INSTALL_DIR_QT)\extcap /d
-	if exist sshdump.pdb xcopy sshdump.pdb $(INSTALL_DIR_QT)\extcap /d
-	if exist randpktdump.exe xcopy randpktdump.exe $(INSTALL_DIR_QT)\extcap /d
-	if exist randpktdump.pdb xcopy randpktdump.pdb $(INSTALL_DIR_QT)\extcap /d
+	if exist ".\extcap\androiddump.exe" xcopy ".\extcap\androiddump.exe" $(INSTALL_DIR_QT)\extcap /d
+	if exist ".\extcap\androiddump.pdb" xcopy ".\extcap\androiddump.pdb" $(INSTALL_DIR_QT)\extcap /d
+	if exist ".\extcap\randpktdump.exe" xcopy ".\extcap\randpktdump.exe" $(INSTALL_DIR_QT)\extcap /d
+	if exist ".\extcap\randpktdump.pdb" xcopy ".\extcap\randpktdump.pdb" $(INSTALL_DIR_QT)\extcap /d
+	if exist ".\extcap\sshdump.exe" xcopy ".\extcap\sshdump.exe" $(INSTALL_DIR_QT)\extcap /d
+	if exist ".\extcap\sshdump.pdb" xcopy ".\extcap\sshdump.pdb" $(INSTALL_DIR_QT)\extcap /d
 	if exist capinfos.exe xcopy capinfos.exe $(INSTALL_DIR) /d
 	if exist capinfos.pdb xcopy capinfos.pdb $(INSTALL_DIR) /d
 	if exist captype.exe xcopy captype.exe $(INSTALL_DIR) /d
@@ -1551,6 +1513,8 @@ checkapi: checkapi_local
 	cd ../capchild
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake checkapi
 	cd ../caputils
+	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake checkapi
+	cd ../randpkt_core
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake checkapi
 	cd ../codecs
 	$(MAKE) /$(MAKEFLAGS) -f Makefile.nmake checkapi

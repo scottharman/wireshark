@@ -203,6 +203,8 @@
 #define CONN_TYPE_P2P               2
 #define CONN_TYPE_RESERVED          3
 
+#define ENIP_CIP_INTERFACE          0
+
 /* Define common services */
 #define GENERIC_SC_LIST \
    { SC_GET_ATT_ALL,          "Get Attributes All" }, \
@@ -320,21 +322,26 @@ typedef struct cip_req_info {
    void                      *pData;
    cip_simple_request_info_t *ciaData;
    cip_conn_info_t*           connInfo;
-   gboolean                   isUnconnectedSend;
 } cip_req_info_t;
 
 /*
 ** Exported functions
 */
+
+/* Depending on if a Class or Symbol segment appears in Connection Path or
+   a Request Path, display '->' before or after the actual name. */
+#define NO_DISPLAY 0
+#define DISPLAY_CONNECTION_PATH 1
+#define DISPLAY_REQUEST_PATH 2
 extern void dissect_epath( tvbuff_t *tvb, packet_info *pinfo, proto_tree *path_tree, proto_item *epath_item, int offset, int path_length,
-                          gboolean generate, gboolean packed, cip_simple_request_info_t* req_data, cip_safety_epath_info_t* safety);
+                          gboolean generate, gboolean packed, cip_simple_request_info_t* req_data, cip_safety_epath_info_t* safety,
+                          int display_type);
 extern void dissect_cip_date_and_time(proto_tree *tree, tvbuff_t *tvb, int offset, int hf_datetime);
 extern attribute_info_t* cip_get_attribute(guint class_id, guint instance, guint attribute);
 
 /*
 ** Exported variables
 */
-extern dissector_table_t subdissector_class_table;
 extern const value_string cip_sc_rr[];
 extern const value_string cip_reset_type_vals[];
 extern value_string_ext cip_gs_vals_ext;
@@ -367,6 +374,14 @@ extern int dissect_optional_attr_list(packet_info *pinfo, proto_tree *tree, prot
 extern int dissect_optional_service_list(packet_info *pinfo, proto_tree *tree, proto_item *item, tvbuff_t *tvb,
    int offset, int total_len);
 
+extern int dissect_packed_epath(packet_info *pinfo, proto_tree *tree, proto_item *item, tvbuff_t *tvb,
+   int offset, int total_len);
+extern int dissect_padded_epath(packet_info *pinfo, proto_tree *tree, proto_item *item, tvbuff_t *tvb,
+   int offset, int total_len);
+extern int dissect_padded_epath_len_usint(packet_info *pinfo, proto_tree *tree, proto_item *item, tvbuff_t *tvb,
+   int offset, int total_len);
+extern int dissect_padded_epath_len_uint(packet_info *pinfo, proto_tree *tree, proto_item *item, tvbuff_t *tvb,
+   int offset, int total_len);
 
 /*
  * Editor modelines

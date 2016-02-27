@@ -42,7 +42,6 @@
 
 #include "wsutil/file_util.h"
 #include "wsutil/filesystem.h"
-#include "wsutil/str_util.h"
 
 #include "epan/addr_resolv.h"
 #include "epan/dissector_filters.h"
@@ -130,6 +129,7 @@
 #include "sctp_assoc_analyse_dialog.h"
 #include "sctp_graph_dialog.h"
 #include "sequence_dialog.h"
+#include "show_packet_bytes_dialog.h"
 #include "stats_tree_dialog.h"
 #include "stock_icon.h"
 #include "supported_protocols_dialog.h"
@@ -261,7 +261,7 @@ bool MainWindow::openCaptureFile(QString cf_path, QString read_filter, unsigned 
         }
         break;
     }
-    // get_dirname overwrites its path. Hopefully this isn't a problem.
+    // get_dirname overwrites its path.
     wsApp->setLastOpenDir(get_dirname(cf_path.toUtf8().data()));
 
     main_ui_->statusBar->showExpert();
@@ -706,8 +706,8 @@ void MainWindow::captureFileReadFinished() {
         add_menu_recent_capture_file(capture_file_.capFile()->filename);
 
         /* Remember folder for next Open dialog and save it in recent */
-        dir_path = get_dirname(g_strdup(capture_file_.capFile()->filename));
-        wsApp->setLastOpenDir(dir_path);
+        dir_path = g_strdup(capture_file_.capFile()->filename);
+        wsApp->setLastOpenDir(get_dirname(dir_path));
         g_free(dir_path);
     }
 
@@ -1467,7 +1467,7 @@ void MainWindow::showAccordionFrame(AccordionFrame *show_frame, bool toggle)
     QList<AccordionFrame *>frame_list = QList<AccordionFrame *>()
             << main_ui_->goToFrame << main_ui_->searchFrame
             << main_ui_->addressEditorFrame << main_ui_->columnEditorFrame
-            << main_ui_->preferenceEditorFrame;
+            << main_ui_->preferenceEditorFrame << main_ui_->filterExpressionFrame;
 
     frame_list.removeAll(show_frame);
     foreach (AccordionFrame *af, frame_list) af->animatedHide();
@@ -1759,6 +1759,13 @@ void MainWindow::on_actionFileExportPacketBytes_triggered()
         wsApp->setLastOpenDir(&file_name);
     }
 }
+
+void MainWindow::on_actionContextShowPacketBytes_triggered()
+{
+    ShowPacketBytesDialog *spbd = new ShowPacketBytesDialog(*this, capture_file_);
+    spbd->show();
+}
+
 void MainWindow::on_actionFileExportPDU_triggered()
 {
     ExportPDUDialog *exportpdu_dialog = new ExportPDUDialog(this);
@@ -1795,8 +1802,7 @@ void MainWindow::on_actionFileExportSSLSessionKeys_triggered()
         return;
     }
 
-    save_title.append(wsApp->windowTitleString(tr("Export SSL Session Keys (%1 key%2").
-            arg(keylist_len).arg(plurality(keylist_len, "", "s"))));
+    save_title.append(wsApp->windowTitleString(tr("Export SSL Session Keys (%Ln key(s))", "", keylist_len)));
     file_name = QFileDialog::getSaveFileName(this,
                                              save_title,
                                              wsApp->lastOpenDir().canonicalPath(),
@@ -2177,12 +2183,13 @@ void MainWindow::setTimestampFormat(QAction *action)
     if (recent.gui_time_format != tsf) {
         timestamp_set_type(tsf);
         recent.gui_time_format = tsf;
+
+        if (packet_list_) {
+            packet_list_->resetColumns();
+        }
         if (capture_file_.capFile()) {
             /* This call adjusts column width */
             cf_timestamp_auto_precision(capture_file_.capFile());
-        }
-        if (packet_list_) {
-            packet_list_->resetColumns();
         }
     }
 }
@@ -2199,12 +2206,13 @@ void MainWindow::setTimestampPrecision(QAction *action)
         /* the actual precision will be set in packet_list_queue_draw() below */
         timestamp_set_precision(tsp);
         recent.gui_time_precision = tsp;
+
+        if (packet_list_) {
+            packet_list_->resetColumns();
+        }
         if (capture_file_.capFile()) {
             /* This call adjusts column width */
             cf_timestamp_auto_precision(capture_file_.capFile());
-        }
-        if (packet_list_) {
-            packet_list_->resetColumns();
         }
     }
 }
@@ -2218,12 +2226,12 @@ void MainWindow::on_actionViewTimeDisplaySecondsWithHoursAndMinutes_triggered(bo
     }
     timestamp_set_seconds_type(recent.gui_seconds_format);
 
+    if (packet_list_) {
+        packet_list_->resetColumns();
+    }
     if (capture_file_.capFile()) {
         /* This call adjusts column width */
         cf_timestamp_auto_precision(capture_file_.capFile());
-    }
-    if (packet_list_) {
-        packet_list_->resetColumns();
     }
 }
 
@@ -2380,7 +2388,7 @@ void MainWindow::colorizeWithFilter()
     if (ok) {
         // Assume "Color X"
         gchar *err_msg = NULL;
-        if (color_filters_set_tmp(color_number, filter.toUtf8().constData(), FALSE, &err_msg)) {
+        if (!color_filters_set_tmp(color_number, filter.toUtf8().constData(), FALSE, &err_msg)) {
             simple_dialog(ESD_TYPE_ERROR, ESD_BTN_OK, "%s", err_msg);
             g_free(err_msg);
         }

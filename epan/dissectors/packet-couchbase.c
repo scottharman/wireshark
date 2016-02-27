@@ -1,7 +1,7 @@
 /* packet-couchbase.c
  *
  * Routines for Couchbase Protocol
- * Copyright 2015, Dave Rigby <daver@couchbase.com>
+ * Copyright 2015-2016, Dave Rigby <daver@couchbase.com>
  * Copyright 2011, Sergey Avseyev <sergey.avseyev@gmail.com>
  *
  * With contributions from Mark Woosey <mark@markwoosey.com>
@@ -351,7 +351,6 @@ static int hf_vbucket_states_size = -1;
 static int hf_vbucket_states_id = -1;
 static int hf_vbucket_states_seqno = -1;
 
-static int hf_multipath = -1;
 static int hf_multipath_opcode = -1;
 static int hf_multipath_index = -1;
 static int hf_multipath_pathlen = -1;
@@ -655,6 +654,29 @@ has_json_value(guint8 opcode)
 
   default:
     return FALSE;
+  }
+}
+
+/* Dissects the required extras for subdoc single-path packets */
+static void
+dissect_subdoc_spath_required_extras(tvbuff_t *tvb, proto_tree *extras_tree,
+                                     guint8 extlen, gboolean request, gint* offset,
+                                     guint16 *path_len, gboolean *illegal)
+{
+  if (request) {
+    if (extlen >= 3) {
+      *path_len = tvb_get_ntohs(tvb, *offset);
+      proto_tree_add_item(extras_tree, hf_extras_pathlen, tvb, *offset, 2,
+                          ENC_BIG_ENDIAN);
+      *offset += 2;
+
+      proto_tree_add_bitmask(extras_tree, tvb, *offset, hf_subdoc_flags,
+                             ett_extras_flags, subdoc_flags, ENC_BIG_ENDIAN);
+      *offset += 1;
+    } else {
+      /* Must always have at least 3 bytes of extras */
+      *illegal = TRUE;
+    }
   }
 }
 
@@ -1000,6 +1022,10 @@ dissect_extras(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
   case PROTOCOL_BINARY_CMD_SUBDOC_GET:
   case PROTOCOL_BINARY_CMD_SUBDOC_EXISTS:
+    dissect_subdoc_spath_required_extras(tvb, extras_tree, extlen, request,
+                                         &offset, path_len, &illegal);
+    break;
+
   case PROTOCOL_BINARY_CMD_SUBDOC_DICT_ADD:
   case PROTOCOL_BINARY_CMD_SUBDOC_DICT_UPSERT:
   case PROTOCOL_BINARY_CMD_SUBDOC_DELETE:
@@ -1009,23 +1035,21 @@ dissect_extras(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
   case PROTOCOL_BINARY_CMD_SUBDOC_ARRAY_INSERT:
   case PROTOCOL_BINARY_CMD_SUBDOC_ARRAY_ADD_UNIQUE:
   case PROTOCOL_BINARY_CMD_SUBDOC_COUNTER:
-    if (extlen) {
-        if (request) {
-          *path_len = tvb_get_ntohs(tvb, offset);
-          proto_tree_add_item(extras_tree, hf_extras_pathlen, tvb, offset, 2, ENC_BIG_ENDIAN);
-          offset += 2;
-
-          proto_tree_add_bitmask(extras_tree, tvb, offset, hf_subdoc_flags, ett_extras_flags, subdoc_flags, ENC_BIG_ENDIAN);
-          offset += 1;
-        }
-    } else if (request) {
-      /* Request must have extras */
-      missing = TRUE;
+    dissect_subdoc_spath_required_extras(tvb, extras_tree, extlen, request,
+                                         &offset, path_len, &illegal);
+    if (request) {
+      /* optional expiry only permitted for mutation requests,
+         iff extlen == 7 */
+      if (extlen == 7) {
+        proto_tree_add_item(extras_tree, hf_extras_expiration, tvb, offset, 4, ENC_BIG_ENDIAN);
+        offset += 4;
+      } else if (extlen != 3) {
+        illegal = TRUE;
+      }
     }
     break;
 
   case PROTOCOL_BINARY_CMD_SUBDOC_MULTI_LOOKUP:
-  case PROTOCOL_BINARY_CMD_SUBDOC_MULTI_MUTATION:
     if (request) {
       if (extlen) {
         illegal = TRUE;
@@ -1202,6 +1226,56 @@ dissect_multipath_lookup_response(tvbuff_t *tvb, packet_info *pinfo,
 }
 
 static void
+dissect_multipath_mutation_response(tvbuff_t *tvb, packet_info *pinfo,
+                                    proto_tree *tree, gint offset, guint32 value_len)
+{
+  gint end = offset + value_len;
+  int spec_idx = 0;
+
+  /* Expect a variable number of mutation responses:
+   * - If response.status == SUCCESS, zero to N responses, one for each mutation
+   *   spec which returns a value.
+   * - If response.status != SUCCESS, exactly 1 response, for first failing
+   *   spec.
+   */
+  while (offset < end) {
+    proto_item *ti;
+    proto_tree *multipath_tree;
+    tvbuff_t *json_tvb;
+    guint32 status;
+    gint start_offset = offset;
+
+    ti = proto_tree_add_subtree_format(tree, tvb, offset, -1, ett_multipath,
+                                       &multipath_tree, "Mutation Result [ %u ]",
+                                       spec_idx);
+
+    proto_tree_add_item(multipath_tree, hf_multipath_index, tvb, offset, 1,
+                        ENC_BIG_ENDIAN);
+    offset += 1;
+    proto_tree_add_item_ret_uint(multipath_tree, hf_status, tvb, offset, 2,
+                                 ENC_BIG_ENDIAN, &status);
+    offset += 2;
+    if (status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+      guint32 result_len;
+      proto_tree_add_item_ret_uint(multipath_tree, hf_value_length, tvb,
+                                   offset, 4, ENC_BIG_ENDIAN, &result_len);
+      offset += 4;
+
+      proto_tree_add_item(multipath_tree, hf_value, tvb, offset, result_len,
+                          ENC_ASCII | ENC_NA);
+      if (result_len > 0) {
+        json_tvb = tvb_new_subset(tvb, offset, result_len, result_len);
+        call_dissector(json_handle, json_tvb, pinfo, multipath_tree);
+      }
+      offset += result_len;
+    }
+    proto_item_set_len(ti, offset - start_offset);
+
+    spec_idx++;
+  }
+}
+
+static void
 dissect_multipath_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                         gint offset, guint32 value_len, gboolean is_mutation,
                         gboolean request)
@@ -1246,12 +1320,12 @@ dissect_multipath_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         offset += 4;
       }
 
-      proto_tree_add_item(multipath_tree, hf_path, tvb, offset, path_len,
+      proto_tree_add_item(multipath_tree, hf_multipath_path, tvb, offset, path_len,
                           ENC_ASCII | ENC_NA);
       offset += path_len;
 
       if (spec_value_len > 0) {
-        proto_tree_add_item(multipath_tree, hf_value, tvb, offset,
+        proto_tree_add_item(multipath_tree, hf_multipath_value, tvb, offset,
                             spec_value_len, ENC_ASCII | ENC_NA);
         offset += spec_value_len;
       }
@@ -1261,15 +1335,8 @@ dissect_multipath_value(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
       spec_idx++;
     }
   } else {
-    /* Response - for lookup we expect one lookup_result per path. */
     if (is_mutation) {
-        ti = proto_tree_add_item(tree, hf_value, tvb, offset, value_len,
-                                 ENC_ASCII | ENC_NA);
-
-        expert_add_info_format(pinfo, ti, &ef_warn_shall_not_have_value,
-                               "%s Response shall not have Value",
-                               val_to_str_ext(PROTOCOL_BINARY_CMD_SUBDOC_MULTI_MUTATION,
-                                              &opcode_vals_ext, "Opcode 0x%x"));
+      dissect_multipath_mutation_response(tvb, pinfo, tree, offset, value_len);
     } else {
       dissect_multipath_lookup_response(tvb, pinfo, tree, offset, value_len);
     }
@@ -1555,8 +1622,8 @@ dissect_couchbase(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
     dissect_value(tvb, pinfo, couchbase_tree, offset, value_len, path_len,
                   opcode, request);
   } else if (bodylen) {
-    ti = proto_tree_add_item(couchbase_tree, hf_value, tvb, offset, bodylen,
-                             ENC_ASCII | ENC_NA);
+    proto_tree_add_item(couchbase_tree, hf_value, tvb, offset, bodylen,
+                        ENC_ASCII | ENC_NA);
     if (status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
       tvbuff_t *json_tvb;
       json_tvb = tvb_new_subset(tvb, offset, bodylen, bodylen);
@@ -1566,17 +1633,7 @@ dissect_couchbase(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
         dissect_multipath_lookup_response(tvb, pinfo, tree, offset, value_len);
 
     } else if (opcode == PROTOCOL_BINARY_CMD_SUBDOC_MULTI_MUTATION) {
-        /* Upon non-success includes the index and status code of first path
-         * to fail.
-         */
-        proto_tree *multipath_tree;
-        multipath_tree = proto_item_add_subtree(ti, ett_multipath);
-
-        proto_tree_add_item(multipath_tree, hf_status, tvb, offset, 2,
-                            ENC_BIG_ENDIAN);
-        offset += 2;
-        proto_tree_add_item(multipath_tree, hf_multipath_index, tvb, offset, 1,
-                            ENC_BIG_ENDIAN);
+        dissect_multipath_mutation_response(tvb, pinfo, tree, offset, value_len);
     }
     col_append_fstr(pinfo->cinfo, COL_INFO, ", %s",
                     val_to_str_ext(status, &status_vals_ext, "Unknown status: 0x%x"));
@@ -1716,7 +1773,6 @@ proto_register_couchbase(void)
     { &hf_observe_status, { "Status", "couchbase.observe.status", FT_UINT8, BASE_HEX, NULL, 0x0, "Status of the observable key", HFILL } },
     { &hf_observe_cas, { "CAS", "couchbase.observe.cas", FT_UINT64, BASE_HEX, NULL, 0x0, "CAS value of the observable key", HFILL } },
 
-    { &hf_multipath, { "Multipath", "couchbase.multipath", FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL } },
     { &hf_multipath_opcode, { "Opcode", "couchbase.multipath.opcode", FT_UINT8, BASE_HEX|BASE_EXT_STRING, &opcode_vals_ext, 0x0, "Command code", HFILL } },
     { &hf_multipath_index, { "Index", "couchbase.multipath.index", FT_UINT8, BASE_DEC, NULL, 0x0, NULL, HFILL } },
     { &hf_multipath_pathlen, { "Path Length", "couchbase.multipath.path.length", FT_UINT16, BASE_DEC, NULL, 0x0, NULL, HFILL } },

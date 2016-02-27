@@ -279,11 +279,13 @@ set(ASN1_DISSECTOR_SRC
 	dissectors/packet-sabp.c
 	dissectors/packet-sbc-ap.c
 	dissectors/packet-smrse.c
+	dissectors/packet-snmp.c
 	dissectors/packet-spnego.c
 	dissectors/packet-sv.c
 	dissectors/packet-t124.c
 	dissectors/packet-t125.c
 	dissectors/packet-t38.c
+	dissectors/packet-tcap.c
 	dissectors/packet-tetra.c
 	dissectors/packet-ulp.c
 	dissectors/packet-wlancertextn.c
@@ -295,8 +297,6 @@ set(ASN1_DISSECTOR_SRC
 )
 
 set(DIRTY_ASN1_DISSECTOR_SRC
-	dissectors/packet-snmp.c
-	dissectors/packet-tcap.c
 )
 
 set(DIRTY_CORBA_IDL_DISSECTOR_SRC
@@ -453,7 +453,6 @@ set(DISSECTOR_SRC
 	dissectors/packet-btle_rf.c
 	dissectors/packet-btl2cap.c
 	dissectors/packet-btmcap.c
-	dissectors/packet-btobex.c
 	dissectors/packet-btrfcomm.c
 	dissectors/packet-btsap.c
 	dissectors/packet-btsdp.c
@@ -691,6 +690,7 @@ set(DISSECTOR_SRC
 	dissectors/packet-fip.c
 	dissectors/packet-fix.c
 	dissectors/packet-flexnet.c
+	dissectors/packet-flexray.c
 	dissectors/packet-flip.c
 	dissectors/packet-fmp.c
 	dissectors/packet-fmp_notify.c
@@ -1077,6 +1077,7 @@ set(DISSECTOR_SRC
 	dissectors/packet-nntp.c
 	dissectors/packet-noe.c
 	dissectors/packet-nsip.c
+	dissectors/packet-nsh.c
 	dissectors/packet-nsrp.c
 	dissectors/packet-nstrace.c
 	dissectors/packet-nt-oui.c
@@ -1087,6 +1088,7 @@ set(DISSECTOR_SRC
 	dissectors/packet-nwmtp.c
 	dissectors/packet-nwp.c
 	dissectors/packet-oampdu.c
+	dissectors/packet-obex.c
 	dissectors/packet-ocfs2.c
 	dissectors/packet-oicq.c
 	dissectors/packet-oipf.c
@@ -1360,6 +1362,7 @@ set(DISSECTOR_SRC
 	dissectors/packet-turnchannel.c
 	dissectors/packet-tuxedo.c
 	dissectors/packet-tzsp.c
+	dissectors/packet-u3v.c
 	dissectors/packet-ua.c
 	dissectors/packet-ua3g.c
 	dissectors/packet-uasip.c
@@ -1382,7 +1385,9 @@ set(DISSECTOR_SRC
 	dissectors/packet-usb-masstorage.c
 	dissectors/packet-usb-video.c
 	dissectors/packet-usb.c
+	dissectors/packet-usbip.c
 	dissectors/packet-user_encap.c
+	dissectors/packet-userlog.c
 	dissectors/packet-uts.c
 	dissectors/packet-v120.c
 	dissectors/packet-v150fw.c
@@ -1567,7 +1572,7 @@ set(NGHTTP2_FILES
 )
 source_group(nghttp2 FILES ${NGHTTP2_FILES})
 
-ADD_CUSTOM_TARGET(
+add_custom_target(
 	update-sminmpec
 	COMMAND ${PERL_EXECUTABLE}
 		${CMAKE_SOURCE_DIR}/tools/make-sminmpec.pl
@@ -1577,9 +1582,9 @@ ADD_CUSTOM_TARGET(
 )
 set_target_properties(update-sminmpec PROPERTIES FOLDER "tools")
 
-ADD_CUSTOM_COMMAND(
-	OUTPUT	ps.c
-	COMMAND	${PYTHON_EXECUTABLE}
+add_custom_command(
+	OUTPUT ps.c
+	COMMAND ${PYTHON_EXECUTABLE}
 		${CMAKE_SOURCE_DIR}/tools/rdps.py
 		${CMAKE_CURRENT_SOURCE_DIR}/print.ps
 		ps.c
@@ -1694,15 +1699,11 @@ add_lemon_files(LIBWIRESHARK_FILES
 set(epan_LIBS
 	wiretap
 	wsutil
-#	@SSL_LIBS@
 	${GLIB2_LIBRARIES}
 	${PCAP_LIBRARIES}
-#	@SOCKET_LIBS@
-#	@NSL_LIBS@
 	${CARES_LIBRARIES}
 	${ADNS_LIBRARIES}
 	${KERBEROS_LIBRARIES}
-#	@FRAMEWORKS@
 	${GEOIP_LIBRARIES}
 	${GCRYPT_LIBRARIES}
 	${GNUTLS_LIBRARIES}
@@ -1822,7 +1823,7 @@ add_custom_command(OUTPUT libwireshark.abi.tar.gz
 
 # By default the name for a library with target name epan will be libepan,
 # but Ethereal is now named Wireshark
-SET_TARGET_PROPERTIES(epan PROPERTIES
+set_target_properties(epan PROPERTIES
 	OUTPUT_NAME "wireshark"
 	PREFIX "lib"
 	FOLDER "DLLs"

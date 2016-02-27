@@ -6631,6 +6631,28 @@ guint8 lchId_type_table[]= {
 	MAC_CONTENT_PS_DTCH,	/* 14 Interactive PS => DTCH*/
 	MAC_CONTENT_CCCH	/* This is CCCH? */
 };
+
+/* Mapping logicalchannel id to RLC_MODE */
+guint8 lchId_rlc_map[] = {
+        0,
+        RLC_UM, /* Logical channel id = 1 is SRB1 which uses RLC_UM*/
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_TM, /*5 to 7 Conv CS Speech*/
+        RLC_TM,
+        RLC_TM, /*...*/
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM,
+        RLC_AM, /* This is CCCH which is UM?, probably not */
+};
+
+
 /* Preference variables */
 /* Array with preference variables for easy looping, TODO: merge this with
  * lchId_type_table[] */
@@ -10293,7 +10315,7 @@ int i;
     }
 
     /*Find the conversations assoicated with the HS-DSCH flows in this packet and set proper H-RNTI*/
-    set_address(&null_addr, AT_NONE, 0, NULL);
+    clear_address(&null_addr);
     for (i = 0; i < maxNrOfMACdFlows; i++) {
         if (nbap_hsdsch_channel_info[i].crnc_port != 0){
             conversation = find_conversation(actx->pinfo->num, &(nbap_hsdsch_channel_info[i].crnc_address), &null_addr,
@@ -18225,7 +18247,7 @@ guint32 no_ddi_entries, i;
     }
 
     /* Check if we have conversation info */
-    set_address(&null_addr, AT_NONE, 0, NULL);
+    clear_address(&null_addr);
     p_conv = find_conversation(actx->pinfo->num, &nbap_edch_channel_info[e_dch_macdflow_id].crnc_address, &null_addr,
                                PT_UDP,
                                nbap_edch_channel_info[e_dch_macdflow_id].crnc_port, 0, NO_ADDR_B);
@@ -18520,7 +18542,7 @@ num_items = 1;
 
     /*Do the configurations*/
     /* Check if we have conversation info */
-    set_address(&null_addr, AT_NONE, 0, NULL);
+    clear_address(&null_addr);
     p_conv = find_conversation(actx->pinfo->num, &nbap_edch_channel_info[e_dch_macdflow_id].crnc_address, &null_addr,
                                PT_UDP,
                                nbap_edch_channel_info[e_dch_macdflow_id].crnc_port, 0, NO_ADDR_B);
@@ -18632,7 +18654,7 @@ BindingID_port = 0;
          * Basically the idea here is that we create a new converation (Which is ok? maybe?)
          * And then hijack the old conversation and let lower tree items configure that hijacked data.
          * */
-        set_address(&null_addr, AT_NONE, 0, NULL);
+        clear_address(&null_addr);
 
         set_address(&dst_addr, AT_IPv4, 4, &transportLayerAddress_ipv4);
 
@@ -23340,7 +23362,7 @@ int i;
         return offset;
     }
     /* Set port to zero use that as an indication of whether we have data or not */
-    set_address(&null_addr, AT_NONE, 0, NULL);
+    clear_address(&null_addr);
     for (i = 0; i < maxNrOfCommonMACFlows; i++) {
         if (nbap_common_channel_info[i].crnc_port != 0){
 
@@ -23785,7 +23807,7 @@ dissect_nbap_HSDSCH_FDD_Information(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_
     }
 
     /* Set port to zero use that as an indication of whether we have data or not */
-    set_address(&null_addr, AT_NONE, 0, NULL);
+    clear_address(&null_addr);
     for (i = 0; i < maxNrOfMACdFlows; i++) {
         if (nbap_hsdsch_channel_info[i].crnc_port != 0){
             nbap_debug("Frame %u HSDSCH-MACdFlows-Information:hsdsch_macdflow_id %u Look for conv on IP %s Port %u",
@@ -24119,7 +24141,7 @@ dissect_nbap_HSDSCH_Information_to_Modify(tvbuff_t *tvb _U_, int offset _U_, asn
     }
 
     /* Set port to zero use that as an indication of whether we have data or not */
-    set_address(&null_addr, AT_NONE, 0, NULL);
+    clear_address(&null_addr);
 
     nbap_debug("Frame %u HSDSCH-MACdFlows-Information Start",
         actx->pinfo->num);
@@ -28660,7 +28682,7 @@ dch_id = 0xFFFFFFFF;
                 return offset;
         }
 
-        set_address(&null_addr, AT_NONE, 0, NULL);
+        clear_address(&null_addr);
 
         set_address(&dst_addr, AT_IPv4, 4, &transportLayerAddress_ipv4);
 
@@ -28798,7 +28820,7 @@ BindingID_port = 0;
         {
             return offset;
         }
-        set_address(&null_addr, AT_NONE, 0, NULL);
+        clear_address(&null_addr);
 
         set_address(&dst_addr, AT_IPv4, 4, &transportLayerAddress_ipv4);
 
@@ -32367,7 +32389,7 @@ transportFormatSet_type = NBAP_CPCH;
         {
             return offset;
         }
-        set_address(&null_addr, AT_NONE, 0, NULL);
+        clear_address(&null_addr);
 
         set_address(&dst_addr, AT_IPv4, 4, &transportLayerAddress_ipv4);
 
@@ -32532,7 +32554,7 @@ num_items = 1;
         {
             return offset;
         }
-        set_address(&null_addr, AT_NONE, 0, NULL);
+        clear_address(&null_addr);
 
         set_address(&dst_addr, AT_IPv4, 4, &transportLayerAddress_ipv4);
 
@@ -32675,7 +32697,7 @@ transportFormatSet_type = NBAP_CPCH;
         {
             return offset;
         }
-        set_address(&null_addr, AT_NONE, 0, NULL);
+        clear_address(&null_addr);
 
         set_address(&dst_addr, AT_IPv4, 4, &transportLayerAddress_ipv4);
 
@@ -55165,7 +55187,7 @@ static int dissect_NULL_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, proto_tre
 
 
 /*--- End of included file: packet-nbap-fn.c ---*/
-#line 310 "../../asn1/nbap/packet-nbap-template.c"
+#line 332 "../../asn1/nbap/packet-nbap-template.c"
 
 static int dissect_ProtocolIEFieldValue(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)
 {
@@ -55205,7 +55227,7 @@ static void add_hsdsch_bind(packet_info *pinfo){
 	}
 
 	/* Set port to zero use that as an indication of whether we have data or not */
-	set_address(&null_addr, AT_NONE, 0, NULL);
+	clear_address(&null_addr);
 	for (i = 0; i < maxNrOfMACdFlows; i++) {
 		if (nbap_hsdsch_channel_info[i].crnc_port != 0){
 			conversation = find_conversation(pinfo->num, &(nbap_hsdsch_channel_info[i].crnc_address), &null_addr,
@@ -68499,7 +68521,7 @@ void proto_register_nbap(void)
         NULL, HFILL }},
 
 /*--- End of included file: packet-nbap-hfarr.c ---*/
-#line 479 "../../asn1/nbap/packet-nbap-template.c"
+#line 501 "../../asn1/nbap/packet-nbap-template.c"
 	};
 
 	/* List of subtrees */
@@ -70139,7 +70161,7 @@ void proto_register_nbap(void)
     &ett_nbap_Outcome,
 
 /*--- End of included file: packet-nbap-ettarr.c ---*/
-#line 488 "../../asn1/nbap/packet-nbap-template.c"
+#line 510 "../../asn1/nbap/packet-nbap-template.c"
 	};
 
 	static ei_register_info ei[] = {
@@ -71294,7 +71316,7 @@ proto_reg_handoff_nbap(void)
 
 
 /*--- End of included file: packet-nbap-dis-tab.c ---*/
-#line 546 "../../asn1/nbap/packet-nbap-template.c"
+#line 568 "../../asn1/nbap/packet-nbap-template.c"
 }
 
 

@@ -27,21 +27,23 @@ LEMON = $(top_builddir)/tools/lemon/lemon$(EXEEXT)
 
 RUNLEX = $(top_srcdir)/tools/runlex.sh
 
-AM_CPPFLAGS = $(WS_CPPFLAGS) -I$(top_srcdir) -DTOP_SRCDIR=\"$(abs_top_srcdir)\"
-
-AM_CFLAGS = $(WS_CFLAGS)
-
 if HAVE_WARNINGS_AS_ERRORS
-AM_CFLAGS += -Werror
+WERROR = -Werror
+else
+WERROR =
 endif
+
+INCLUDEDIRS = -I$(top_srcdir)
+
+#AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS)
+
+AM_CFLAGS = $(WERROR) $(WS_CFLAGS)
 
 GENERATED_CFLAGS = $(WS_CFLAGS)
 
-AM_CXXFLAGS = $(WS_CXXFLAGS)
+AM_CXXFLAGS = $(WERROR) $(WS_CXXFLAGS)
 
-if HAVE_WARNINGS_AS_ERRORS
-AM_CXXFLAGS += -Werror
-endif
+GENERATED_CXXFLAGS = $(WS_CXXFLAGS)
 
 AM_LDFLAGS = $(WS_LDFLAGS)
 
@@ -65,6 +67,15 @@ AM_V_SED = $(am__v_SED_@AM_V@)
 am__v_SED_ = $(am__v_SED_@AM_DEFAULT_V@)
 am__v_SED_0 = @echo "  SED     " $@;
 
+# _PYTHON is a reserved automake keyword
+AM_V_python = $(am__v_python_@AM_V@)
+am__v_python_ = $(am__v_python_@AM_DEFAULT_V@)
+am__v_python_0 = @echo "  PYTHON  " $@;
+
+AM_V_YACC = $(am__v_YACC_@AM_V@)
+am__v_YACC_ = $(am__v_YACC_@AM_DEFAULT_V@)
+am__v_YACC_0 = @echo "  YACC    " $@;
+
 .l.c:
 	$(AM_V_RUNLEX)$(RUNLEX) "$(LEX)" "$(SED)" -o$@ $<
 
@@ -74,9 +85,9 @@ am__v_SED_0 = @echo "  SED     " $@;
 # abi-compliance-checker descriptor
 abi_incdirs = $(subst -I,NEWLINE,$(filter -I%,$(WS_CFLAGS) -I$(abs_top_srcdir) -I$(abs_srcdir)))
 abi_sysdirs = $(subst -isystem,NEWLINE,$(filter -isystem%,$(WS_CFLAGS)))
-INCLUDE_DIRS = $(abi_incdirs) $(abi_sysdirs)
+abi_includes = $(abi_incdirs) $(abi_sysdirs)
 abi-descriptor.xml: ../abi-descriptor.template
 	$(AM_V_SED)$(SED) \
-		-e 's|@INCLUDE_DIRS@|$(INCLUDE_DIRS)|g' \
+		-e 's|@INCLUDE_DIRS@|$(abi_includes)|g' \
 		-e 's/ *NEWLINE/\n    /g' \
 		-e 's|@LIBRARY_OUTPUT_PATH@|{RELPATH}/.libs|' $< > $@

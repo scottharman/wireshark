@@ -118,6 +118,8 @@ static match_result match_wide(capture_file *cf, frame_data *fdata,
     void *criterion);
 static match_result match_binary(capture_file *cf, frame_data *fdata,
     void *criterion);
+static match_result match_regex(capture_file *cf, frame_data *fdata,
+    void *criterion);
 static match_result match_dfilter(capture_file *cf, frame_data *fdata,
     void *criterion);
 static match_result match_marked(capture_file *cf, frame_data *fdata,
@@ -358,9 +360,6 @@ cf_open(capture_file *cf, const char *fname, unsigned int type, gboolean is_temp
   cf->prev_cap = NULL;
   cf->cum_bytes = 0;
 
-  /* Adjust timestamp precision if auto is selected, col width will be adjusted */
-  cf_timestamp_auto_precision(cf);
-  /* XXX needed ? */
   packet_list_queue_draw();
   cf_callback_invoke(cf_cb_file_opened, cf);
 
@@ -524,7 +523,7 @@ cf_read(capture_file *cf, gboolean reloading)
   int                  err = 0;
   gchar               *err_info = NULL;
   gchar               *name_ptr;
-  progdlg_t           *progbar        = NULL;
+  progdlg_t           *volatile progbar = NULL;
   GTimeVal             start_time;
   epan_dissect_t       edt;
   dfilter_t           *dfcode;
@@ -1335,7 +1334,7 @@ cf_merge_files(char **out_filenamep, int in_file_count,
   int                        out_fd;
   int                        err      = 0;
   gchar                     *err_info = NULL;
-  int                        err_fileno;
+  guint                      err_fileno;
   merge_result               status;
   merge_progress_callback_t  cb;
 
@@ -2469,7 +2468,7 @@ cf_print_packets(capture_file *cf, print_args_t *print_args)
   proto_tree_needed =
       callback_args.print_args->print_dissections != print_dissections_none ||
       callback_args.print_args->print_hex ||
-      have_custom_cols(&cf->cinfo);
+      have_custom_cols(&cf->cinfo) || have_field_extractors();
   epan_dissect_init(&callback_args.edt, cf->epan, proto_tree_needed, proto_tree_needed);
 
   /* Iterate through the list of packets, printing the packets we were
@@ -2641,8 +2640,8 @@ cf_write_psml_packets(capture_file *cf, print_args_t *print_args)
   callback_args.fh = fh;
 
   /* Fill in the column information, only create the protocol tree
-     if having custom columns. */
-  proto_tree_needed = have_custom_cols(&cf->cinfo);
+     if having custom columns or field extractors. */
+  proto_tree_needed = have_custom_cols(&cf->cinfo) || have_field_extractors();
   epan_dissect_init(&callback_args.edt, cf->epan, proto_tree_needed, proto_tree_needed);
 
   /* Iterate through the list of packets, printing the packets we were
@@ -2721,8 +2720,8 @@ cf_write_csv_packets(capture_file *cf, print_args_t *print_args)
 
   callback_args.fh = fh;
 
-  /* only create the protocol tree if having custom columns. */
-  proto_tree_needed = have_custom_cols(&cf->cinfo);
+  /* only create the protocol tree if having custom columns or field extractors. */
+  proto_tree_needed = have_custom_cols(&cf->cinfo) || have_field_extractors();
   epan_dissect_init(&callback_args.edt, cf->epan, proto_tree_needed, proto_tree_needed);
 
   /* Iterate through the list of packets, printing the packets we were
@@ -2899,22 +2898,30 @@ match_subtree_text(proto_node *node, gpointer data)
     proto_item_fill_label(fi, label_str);
   }
 
-  /* Does that label match? */
-  label_len = strlen(label_ptr);
-  for (i = 0; i < label_len; i++) {
-    c_char = label_ptr[i];
-    if (cf->case_type)
-      c_char = g_ascii_toupper(c_char);
-    if (c_char == string[c_match]) {
-      c_match++;
-      if (c_match == string_len) {
-        /* No need to look further; we have a match */
-        mdata->frame_matched = TRUE;
-        mdata->finfo = fi;
-        return;
-      }
-    } else
-      c_match = 0;
+  if (cf->regex) {
+    if (g_regex_match(cf->regex, label_ptr, (GRegexMatchFlags) 0, NULL)) {
+      mdata->frame_matched = TRUE;
+      mdata->finfo = fi;
+      return;
+    }
+  } else {
+    /* Does that label match? */
+    label_len = strlen(label_ptr);
+    for (i = 0; i < label_len; i++) {
+      c_char = label_ptr[i];
+      if (cf->case_type)
+        c_char = g_ascii_toupper(c_char);
+      if (c_char == string[c_match]) {
+        c_match++;
+        if (c_match == string_len) {
+          /* No need to look further; we have a match */
+          mdata->frame_matched = TRUE;
+          mdata->finfo = fi;
+          return;
+        }
+      } else
+        c_match = 0;
+    }
   }
 
   /* Recurse into the subtree, if it exists */
@@ -2966,18 +2973,25 @@ match_summary_line(capture_file *cf, frame_data *fdata, void *criterion)
       /* Found it.  See if we match. */
       info_column = edt.pi.cinfo->columns[colx].col_data;
       info_column_len = strlen(info_column);
-      for (i = 0; i < info_column_len; i++) {
-        c_char = info_column[i];
-        if (cf->case_type)
-          c_char = g_ascii_toupper(c_char);
-        if (c_char == string[c_match]) {
-          c_match++;
-          if (c_match == string_len) {
-            result = MR_MATCHED;
-            break;
-          }
-        } else
-          c_match = 0;
+      if (cf->regex) {
+        if (g_regex_match(cf->regex, info_column, (GRegexMatchFlags) 0, NULL)) {
+          result = MR_MATCHED;
+          break;
+        }
+      } else {
+        for (i = 0; i < info_column_len; i++) {
+          c_char = info_column[i];
+          if (cf->case_type)
+            c_char = g_ascii_toupper(c_char);
+          if (c_char == string[c_match]) {
+            c_match++;
+            if (c_match == string_len) {
+              result = MR_MATCHED;
+              break;
+            }
+          } else
+            c_match = 0;
+        }
       }
       break;
     }
@@ -3011,8 +3025,11 @@ cf_find_packet_data(capture_file *cf, const guint8 *string, size_t string_size,
   info.data = string;
   info.data_len = string_size;
 
-  /* String or hex search? */
-  if (cf->string) {
+  /* Regex, String or hex search? */
+  if (cf->regex) {
+    /* Regular Expression search */
+    return find_packet(cf, match_regex, NULL, dir);
+  } else if (cf->string) {
     /* String search - what type of string? */
     switch (cf->scs_type) {
 
@@ -3067,6 +3084,7 @@ match_narrow_and_wide(capture_file *cf, frame_data *fdata, void *criterion)
           result = MR_MATCHED;
           cf->search_pos = i; /* Save the position of the last character
                                  for highlighting the field. */
+          cf->search_len = (guint32)textlen;
           break;
         }
       }
@@ -3114,6 +3132,7 @@ match_narrow(capture_file *cf, frame_data *fdata, void *criterion)
         result = MR_MATCHED;
         cf->search_pos = i; /* Save the position of the last character
                                for highlighting the field. */
+        cf->search_len = (guint32)textlen;
         break;
       }
     }
@@ -3161,6 +3180,7 @@ match_wide(capture_file *cf, frame_data *fdata, void *criterion)
         result = MR_MATCHED;
         cf->search_pos = i; /* Save the position of the last character
                                for highlighting the field. */
+        cf->search_len = (guint32)textlen;
         break;
       }
       i += 1;
@@ -3204,6 +3224,7 @@ match_binary(capture_file *cf, frame_data *fdata, void *criterion)
         result = MR_MATCHED;
         cf->search_pos = i; /* Save the position of the last character
                                for highlighting the field. */
+        cf->search_len = (guint32)datalen;
         break;
       }
     }
@@ -3215,6 +3236,30 @@ match_binary(capture_file *cf, frame_data *fdata, void *criterion)
     i += 1;
   }
   return result;
+}
+
+static match_result
+match_regex(capture_file *cf, frame_data *fdata, void *criterion _U_)
+{
+    match_result  result = MR_NOTMATCHED;
+    GMatchInfo   *match_info = NULL;
+
+    /* Load the frame's data. */
+    if (!cf_read_record(cf, fdata)) {
+        /* Attempt to get the packet failed. */
+        return MR_ERROR;
+    }
+
+    if (g_regex_match_full(cf->regex, ws_buffer_start_ptr(&cf->buf), fdata->cap_len,
+                           0, (GRegexMatchFlags) 0, &match_info, NULL))
+    {
+        gint start_pos = 0, end_pos = 0;
+        g_match_info_fetch_pos (match_info, 0, &start_pos, &end_pos);
+        cf->search_pos = end_pos - 1;
+        cf->search_len = end_pos - start_pos;
+        result = MR_MATCHED;
+    }
+    return result;
 }
 
 gboolean
@@ -3453,6 +3498,7 @@ find_packet(capture_file *cf,
     found = packet_list_select_row_from_data(new_fd);
     cf->search_in_progress = FALSE;
     cf->search_pos = 0; /* Reset the position */
+    cf->search_len = 0; /* Reset length */
     if (!found) {
       /* We didn't find a row corresponding to this frame.
          This means that the frame isn't being displayed currently,
@@ -4435,9 +4481,9 @@ cf_save_records(capture_file *cf, const char *fname, guint save_format,
        or moving the capture file, we have to do it by writing the packets
        out in Wiretap. */
 
-    wtapng_section_t            *shb_hdr = NULL;
+    wtap_optionblock_t           shb_hdr = NULL;
     wtapng_iface_descriptions_t *idb_inf = NULL;
-    wtapng_name_res_t           *nrb_hdr = NULL;
+    wtap_optionblock_t           nrb_hdr = NULL;
     int encap;
 
     /* XXX: what free's this shb_hdr? */
@@ -4658,9 +4704,9 @@ cf_export_specified_packets(capture_file *cf, const char *fname,
   int                          err;
   wtap_dumper                 *pdh;
   save_callback_args_t         callback_args;
-  wtapng_section_t            *shb_hdr = NULL;
+  wtap_optionblock_t           shb_hdr = NULL;
   wtapng_iface_descriptions_t *idb_inf = NULL;
-  wtapng_name_res_t           *nrb_hdr = NULL;
+  wtap_optionblock_t           nrb_hdr = NULL;
   int                          encap;
 
   cf_callback_invoke(cf_cb_file_export_specified_packets_started, (gpointer)fname);

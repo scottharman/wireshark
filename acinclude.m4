@@ -59,10 +59,10 @@ dnl Roland McGrath, Noah Friedman, david d zuhn, and many others.
 # "-R" here.
 #
 AC_DEFUN([AC_WIRESHARK_ADD_DASH_L],
-[$1="$$1 -L$2"
+[AX_APPEND_FLAG(-L$2, $1)
 case "$host_os" in
   solaris*)
-    $1="$$1 -R$2"
+    AX_APPEND_FLAG(-R$2, $1)
   ;;
 esac
 ])
@@ -1412,7 +1412,7 @@ AC_LINK_IFELSE(
   ],
   [
     AC_MSG_RESULT(yes)
-    WS_LDFLAGS="$WS_LDFLAGS $LD_OPTION"
+    AX_APPEND_FLAG([$LD_OPTION], [WS_LDFLAGS])
     can_add_to_ldflags=yes
   ],
   [
@@ -1604,7 +1604,7 @@ if test "x$ac_supports_gcc_flags" = "xyes" ; then
               # added them, by setting CFLAGS to the saved value plus
               # just the new option.
               #
-              WS_CFLAGS="$WS_CFLAGS $GCC_OPTION"
+              AX_APPEND_FLAG([$GCC_OPTION], [WS_CFLAGS])
               if test "$CC" = "$CC_FOR_BUILD"; then
                 #
                 # We're building the build tools with the same compiler
@@ -1623,7 +1623,7 @@ if test "x$ac_supports_gcc_flags" = "xyes" ; then
           # added them, by setting CFLAGS to the saved value plus
           # just the new option.
           #
-          WS_CFLAGS="$WS_CFLAGS $GCC_OPTION"
+          AX_APPEND_FLAG([$GCC_OPTION], [WS_CFLAGS])
           if test "$CC" = "$CC_FOR_BUILD"; then
             #
             # We're building the build tools with the same compiler
@@ -1710,7 +1710,7 @@ if test "x$ac_supports_gcc_flags" = "xyes" ; then
                 # added them, by setting CXXFLAGS to the saved value plus
                 # just the new option.
                 #
-                WS_CXXFLAGS="$WS_CXXFLAGS $GCC_OPTION"
+                AX_APPEND_FLAG([$GCC_OPTION], [WS_CXXFLAGS])
               ],
               [
                 AC_MSG_RESULT(yes)
@@ -1721,7 +1721,7 @@ if test "x$ac_supports_gcc_flags" = "xyes" ; then
             # added them, by setting CXXFLAGS to the saved value plus
             # just the new option.
             #
-            WS_CXXFLAGS="$WS_CXXFLAGS $GCC_OPTION"
+            AX_APPEND_FLAG([$GCC_OPTION], [WS_CXXFLAGS])
           fi
         ],
         [
@@ -1783,7 +1783,7 @@ if test "x$GCC" = "xyes" -o "x$CC" = "xclang" ; then
                   ]])],
                   [
                     AC_MSG_RESULT(yes)
-                    WS_CPPFLAGS="$WS_CPPFLAGS -D_FORTIFY_SOURCE=2"
+                    AX_APPEND_FLAG([-D_FORTIFY_SOURCE=2], [WS_CPPFLAGS])
                   ],
                   [
                     AC_MSG_RESULT(no)
@@ -2055,7 +2055,10 @@ AC_DEFUN([AC_WIRESHARK_QT_CHECK],
 	# other modules.
 	#
 	AC_WIRESHARK_QT_MODULE_CHECK(Core, $1, $qt_version_to_check,
-	    [qt_version_to_check=$qt_version],
+	    [
+	      qt_version_to_check=$qt_version
+	      QT_VERSION=$mod_version
+	    ],
 	    [no_qt=yes])
 
 	if test x"$no_qt" = x ; then
@@ -2100,8 +2103,6 @@ AC_DEFUN([AC_WIRESHARK_QT_CHECK],
 			AC_DEFINE(QT_MACEXTRAS_LIB, 1, [Define if we have QtMacExtras]))
 
 		AC_WIRESHARK_QT_ADD_PIC_IF_NEEDED
-
-		AC_SUBST(Qt_LIBS)
 
 		# Run Action-If-Found
 		ifelse([$3], , :, [$3])

@@ -31,7 +31,7 @@
 #include <epan/prefs.h>
 #include <epan/to_str.h>
 
-#include "../capture_opts.h"
+#include "../../capture_opts.h"
 #include <capchild/capture_session.h>
 #include "caputils/capture_ifinfo.h"
 #include "ui/capture.h"
@@ -50,7 +50,7 @@
 #endif
 
 #include "ui/gtk/stock_icons.h"
-#ifndef HAVE_GRESOURCE
+#ifndef HAVE_GDK_GRESOURCE
 #include "ui/gtk/pixbuf-csource.h"
 #endif
 #include "ui/gtk/capture_dlg.h"

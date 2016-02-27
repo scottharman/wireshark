@@ -24,69 +24,24 @@
 
 #include "config.h"
 
-#include "randpkt-core.h"
+#include "extcap-base.h"
 
-#include <glib.h>
-#include <glib/gprintf.h>
-#include <stdlib.h>
-
-#ifdef HAVE_GETOPT_H
-	#include <getopt.h>
-#endif
-
-#ifndef HAVE_GETOPT_LONG
-	#include "wsutil/wsgetopt.h"
-#endif
-
-#ifdef _WIN32
-#include <io.h>
-#endif
-
-#if defined(_WIN32) && !defined(__CYGWIN__)
-	#ifdef HAVE_WINDOWS_H
-		#include <windows.h>
-	#endif
-
-	#include <ws2tcpip.h>
-
-	#ifdef HAVE_WINSOCK2_H
-		#include <winsock2.h>
-	#endif
-
-	#include <process.h>
-
-	#define socket_handle_t SOCKET
-#else
-/*
- * UN*X, or Windows pretending to be UN*X with the aid of Cygwin.
- */
-#define closesocket(socket)  close(socket)
-#define socket_handle_t int
-#define INVALID_SOCKET (-1)
-#define SOCKET_ERROR (-1)
-#endif
-
-#define verbose_print(...) { if (verbose) printf(__VA_ARGS__); }
-#define errmsprintf(...) { printf(__VA_ARGS__); printf("\n"); }
+#include "randpkt_core/randpkt_core.h"
 
 #define RANDPKT_EXTCAP_INTERFACE "randpkt"
 #define RANDPKTDUMP_VERSION_MAJOR 0
 #define RANDPKTDUMP_VERSION_MINOR 1
 #define RANDPKTDUMP_VERSION_RELEASE 0
 
+#define verbose_print(...) { if (verbose) printf(__VA_ARGS__); }
+
 static gboolean verbose = TRUE;
 
 enum {
-	OPT_HELP = 1,
+	EXTCAP_BASE_OPTIONS_ENUM,
+	OPT_HELP,
 	OPT_VERSION,
 	OPT_VERBOSE,
-	OPT_LIST_INTERFACES,
-	OPT_LIST_DLTS,
-	OPT_INTERFACE,
-	OPT_CONFIG,
-	OPT_CAPTURE,
-	OPT_CAPTURE_FILTER,
-	OPT_FIFO,
 	OPT_MAXBYTES,
 	OPT_COUNT,
 	OPT_RANDOM_TYPE,
@@ -95,19 +50,10 @@ enum {
 };
 
 static struct option longopts[] = {
-	/* Generic application options */
-	{ "help",					no_argument,      	NULL, OPT_HELP},
-	{ "version",				no_argument,      	NULL, OPT_VERSION},
+	EXTCAP_BASE_OPTIONS,
+	{ "help",					no_argument,		NULL, OPT_HELP},
+	{ "version",				no_argument,		NULL, OPT_VERSION},
 	{ "verbose",				optional_argument,	NULL, OPT_VERBOSE},
-	/* Extcap options */
-	{ "extcap-interfaces",		no_argument,      	NULL, OPT_LIST_INTERFACES},
-	{ "extcap-dlts",			no_argument,      	NULL, OPT_LIST_DLTS},
-	{ "extcap-interface",		required_argument,	NULL, OPT_INTERFACE},
-	{ "extcap-config",			no_argument,      	NULL, OPT_CONFIG},
-	{ "capture",				no_argument,      	NULL, OPT_CAPTURE},
-	{ "extcap-capture-filter	",	required_argument,	NULL, OPT_CAPTURE_FILTER},
-	{ "fifo",					required_argument,	NULL, OPT_FIFO},
-	/* Interfaces options */
 	{ "maxbytes",				required_argument,	NULL, OPT_MAXBYTES},
 	{ "count",					required_argument,	NULL, OPT_COUNT},
 	{ "random-type",			required_argument, 	NULL, OPT_RANDOM_TYPE},
@@ -116,48 +62,6 @@ static struct option longopts[] = {
     { 0, 0, 0, 0 }
 };
 
-#ifdef _WIN32
-BOOLEAN IsHandleRedirected(DWORD handle)
-{
-	HANDLE h = GetStdHandle(handle);
-	if (h) {
-		BY_HANDLE_FILE_INFORMATION fi;
-		if (GetFileInformationByHandle(h, &fi)) {
-			return TRUE;
-		}
-	}
-	return FALSE;
-}
-
-static void attach_parent_console()
-{
-	BOOL outRedirected, errRedirected;
-
-	outRedirected = IsHandleRedirected(STD_OUTPUT_HANDLE);
-	errRedirected = IsHandleRedirected(STD_ERROR_HANDLE);
-
-	if (outRedirected && errRedirected) {
-		/* Both standard output and error handles are redirected.
-		 * There is no point in attaching to parent process console.
-		 */
-		return;
-	}
-
-	if (AttachConsole(ATTACH_PARENT_PROCESS) == 0) {
-		/* Console attach failed. */
-		return;
-	}
-
-	/* Console attach succeeded */
-	if (outRedirected == FALSE) {
-		freopen("CONOUT$", "w", stdout);
-	}
-
-	if (errRedirected == FALSE) {
-		freopen("CONOUT$", "w", stderr);
-	}
-}
-#endif
 
 static void help(const char* binname)
 {
@@ -215,12 +119,12 @@ static int list_config(char *interface)
 	unsigned list_num;
 
 	if (!interface) {
-		g_fprintf(stderr, "ERROR: No interface specified.\n");
+		errmsg_print("ERROR: No interface specified.");
 		return EXIT_FAILURE;
 	}
 
 	if (g_strcmp0(interface, RANDPKT_EXTCAP_INTERFACE)) {
-		errmsprintf("ERROR: interface must be %s\n", RANDPKT_EXTCAP_INTERFACE);
+		errmsg_print("ERROR: interface must be %s", RANDPKT_EXTCAP_INTERFACE);
 		return EXIT_FAILURE;
 	}
 
@@ -255,12 +159,12 @@ static int list_config(char *interface)
 static int list_dlts(const char *interface)
 {
 	if (!interface) {
-		printf("ERROR: No interface specified.\n");
+		errmsg_print("ERROR: No interface specified.");
 		return EXIT_FAILURE;
 	}
 
 	if (g_strcmp0(interface, RANDPKT_EXTCAP_INTERFACE)) {
-		printf("ERROR: interface must be %s\n", RANDPKT_EXTCAP_INTERFACE);
+		errmsg_print("ERROR: interface must be %s", RANDPKT_EXTCAP_INTERFACE);
 		return EXIT_FAILURE;
 	}
 
@@ -355,7 +259,7 @@ int main(int argc, char *argv[])
 		case OPT_MAXBYTES:
 			maxbytes = atoi(optarg);
 			if (maxbytes > MAXBYTES_LIMIT) {
-				errmsprintf("randpktdump: Max bytes is %u\n", MAXBYTES_LIMIT);
+				errmsg_print("randpktdump: Max bytes is %u", MAXBYTES_LIMIT);
 				return 1;
 			}
 			break;
@@ -382,17 +286,17 @@ int main(int argc, char *argv[])
 
 		case ':':
 			/* missing option argument */
-			printf("Option '%s' requires an argument\n", argv[optind - 1]);
+			errmsg_print("Option '%s' requires an argument", argv[optind - 1]);
 			break;
 
 		default:
-			printf("Invalid option 1: %s\n", argv[optind - 1]);
+			errmsg_print("Invalid option 1: %s", argv[optind - 1]);
 			return EXIT_FAILURE;
 		}
 	}
 
 	if (optind != argc) {
-		printf("Invalid option: %s\n", argv[optind]);
+		errmsg_print("Invalid option: %s", argv[optind]);
 		return EXIT_FAILURE;
 	}
 
@@ -407,7 +311,7 @@ int main(int argc, char *argv[])
 
 	/* Some sanity checks */
 	if ((random_type) && (all_random)) {
-		errmsprintf("You can specify only one between: --random-type, --all-random\n");
+		errmsg_print("You can specify only one between: --random-type, --all-random");
 		return EXIT_FAILURE;
 	}
 
@@ -421,19 +325,19 @@ int main(int argc, char *argv[])
 	result = WSAStartup(MAKEWORD(1,1), &wsaData);
 	if (result != 0) {
 		if (verbose)
-			errmsprintf("ERROR: WSAStartup failed with error: %d\n", result);
+			errmsg_print("ERROR: WSAStartup failed with error: %d", result);
 		return 1;
 	}
 #endif  /* _WIN32 */
 
 	if (do_capture) {
 		if (!fifo) {
-			errmsprintf("ERROR: No FIFO or file specified\n");
+			errmsg_print("ERROR: No FIFO or file specified");
 			return 1;
 		}
 
 		if (g_strcmp0(interface, RANDPKT_EXTCAP_INTERFACE)) {
-			errmsprintf("ERROR: invalid interface\n");
+			errmsg_print("ERROR: invalid interface");
 			return 1;
 		}
 
@@ -498,11 +402,11 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html
  *
  * Local variables:
- * c-basic-offset: 4
- * tab-width: 4
+ * c-basic-offset: 8
+ * tab-width: 8
  * indent-tabs-mode: t
  * End:
  *
- * vi: set shiftwidth=4 tabstop=4 expandtab:
- * :indentSize=4:tabSize=4:noTabs=false:
+ * vi: set shiftwidth=8 tabstop=8 expandtab:
+ * :indentSize=8:tabSize=8:noTabs=false:
  */

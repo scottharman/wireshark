@@ -22,8 +22,7 @@
 
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
-
-plugindir = @plugindir@
+include ../Makefile.am.inc
 
 plugin_LTLIBRARIES = stats_tree.la
 
@@ -31,13 +30,11 @@ stats_tree_la_SOURCES = \
 	$(SRC_FILES)	\
 	$(HEADER_FILES)
 
-stats_tree_la_LDFLAGS = -module -avoid-version
-stats_tree_la_LIBADD = @PLUGIN_LIBS@
+stats_tree_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
 
-# Libs must be cleared, or else libtool won't create a shared module.
-# If your module needs to be linked against any particular libraries,
-# add them here.
-LIBS =
+stats_tree_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
+
+stats_tree_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 
 CLEANFILES = \
 	stats_tree \
@@ -52,8 +49,3 @@ EXTRA_DIST = \
 	moduleinfo.nmake	\
 	plugin.rc.in		\
 	CMakeLists.txt
-
-checkapi:
-	$(PERL) $(top_srcdir)/tools/checkAPIs.pl -g abort -g termoutput -build \
-	-sourcedir=$(srcdir) \
-	$(CLEAN_SRC_FILES) $(CLEAN_HEADER_FILES)

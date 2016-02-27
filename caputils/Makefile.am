@@ -22,8 +22,7 @@
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
 
-AM_CPPFLAGS += -I$(top_srcdir)/wiretap $(LIBGCRYPT_CFLAGS) \
-	$(LIBGNUTLS_CFLAGS) $(PORTAUDIO_INCLUDES)
+AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GLIB_CFLAGS) $(LIBNL_CFLAGS)
 
 noinst_LIBRARIES = libcaputils.a
 

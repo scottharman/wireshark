@@ -1676,8 +1676,8 @@ guint8
 dvbci_get_evt_from_addrs(packet_info *pinfo)
 {
     /* this should be working from C89 on */
-    static const address a_cam  = { AT_STRINGZ, sizeof(ADDR_CAM), ADDR_CAM };
-    static const address a_host = { AT_STRINGZ, sizeof(ADDR_HOST), ADDR_HOST };
+    static const address a_cam  = ADDRESS_INIT(AT_STRINGZ, sizeof(ADDR_CAM), ADDR_CAM);
+    static const address a_host = ADDRESS_INIT(AT_STRINGZ, sizeof(ADDR_HOST), ADDR_HOST);
 
     if ( addresses_equal(&(pinfo->src), &a_cam) &&
          addresses_equal(&(pinfo->dst), &a_host) ) {
@@ -6303,14 +6303,14 @@ proto_register_dvbci(void)
     for(i=0; i<array_length(spdu_info); i++) {
         g_hash_table_insert(spdu_table,
                             GUINT_TO_POINTER((guint)spdu_info[i].tag),
-                            (const gpointer)(&spdu_info[i]));
+                            (gpointer)(&spdu_info[i]));
     }
 
     apdu_table = g_hash_table_new(g_direct_hash, g_direct_equal);
     for(i=0; i<array_length(apdu_info); i++) {
         g_hash_table_insert(apdu_table,
                             GUINT_TO_POINTER((guint)apdu_info[i].tag),
-                            (const gpointer)(&apdu_info[i]));
+                            (gpointer)(&apdu_info[i]));
     }
 
     proto_dvbci = proto_register_protocol("DVB Common Interface", "DVB-CI", "dvb-ci");

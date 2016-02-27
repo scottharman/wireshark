@@ -71,9 +71,9 @@ extcap_register_preferences(void);
 if_capabilities_t *
 extcap_get_if_dlts(const gchar * ifname, char ** err_str);
 
-/* get a list of all capture interfaces */
+/* append a list of all extcap capture interfaces to the specified list */
 GList *
-extcap_interface_list(char **err_str);
+append_extcap_interface_list(GList *list, char **err_str);
 
 /* get a list of all available extcap tools */
 GHashTable *
@@ -86,6 +86,9 @@ extcap_get_if_configuration(const char * ifname);
 
 gboolean
 extcap_has_configuration(const char * ifname, gboolean is_required);
+
+/* converts an extcap setting to its equivalent preference key */
+gchar * extcap_settings_key(const gchar * ifname, const gchar * setting);
 
 #ifdef WIN32
 HANDLE

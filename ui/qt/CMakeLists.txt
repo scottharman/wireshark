@@ -65,6 +65,7 @@ set(WIRESHARK_QT_HEADERS
 	filter_dialog.h
 	filter_expression_frame.h
 	filter_expressions_preferences_frame.h
+	find_line_edit.h
 	follow_stream_dialog.h
 	follow_stream_text.h
 	font_color_preferences_frame.h
@@ -128,6 +129,7 @@ set(WIRESHARK_QT_HEADERS
 	search_frame.h
 	sequence_diagram.h
 	sequence_dialog.h
+	show_packet_bytes_dialog.h
 	simple_dialog.h
 	splash_overlay.h
 	stats_tree_dialog.h
@@ -214,6 +216,7 @@ set(WIRESHARK_QT_SRC
 	filter_dialog.cpp
 	filter_expression_frame.cpp
 	filter_expressions_preferences_frame.cpp
+	find_line_edit.cpp
 	follow_stream_dialog.cpp
 	follow_stream_text.cpp
 	font_color_preferences_frame.cpp
@@ -278,6 +281,7 @@ set(WIRESHARK_QT_SRC
 	service_response_time_dialog.cpp
 	simple_dialog.cpp
 	simple_statistics_dialog.cpp
+	show_packet_bytes_dialog.cpp
 	splash_overlay.cpp
 	sparkline_delegate.cpp
 	stock_icon.cpp
@@ -401,6 +405,7 @@ set(WIRESHARK_QT_UI
 	sctp_graph_byte_dialog.ui
 	search_frame.ui
 	sequence_dialog.ui
+	show_packet_bytes_dialog.ui
 	splash_overlay.ui
 	supported_protocols_dialog.ui
 	tap_parameter_dialog.ui
@@ -457,7 +462,7 @@ if (QT_VERSION EQUAL 5)
 	QT5_WRAP_UI(WIRESHARK_QT_UI_SRC ${WIRESHARK_QT_UI})
 	# For now, do the moc stuff manually
 	QT5_WRAP_CPP(WIRESHARK_QT_MOC_SRC ${WIRESHARK_QT_HEADERS}
-		OPTIONS --no-notes)
+		OPTIONS ${MOC_OPTIONS})
 	# Starting with cmake 2.8.6, we may also use
 	# set(CMAKE_AUTOMOC TRUE)
 	# or
@@ -468,7 +473,7 @@ else()
 	QT4_WRAP_UI(WIRESHARK_QT_UI_SRC ${WIRESHARK_QT_UI})
 	# For now, do the moc stuff manually
 	QT4_WRAP_CPP(WIRESHARK_QT_MOC_SRC ${WIRESHARK_QT_HEADERS}
-		OPTIONS --no-notes)
+		OPTIONS ${MOC_OPTIONS})
 	# Starting with cmake 2.8.6, we may also use
 	# set(CMAKE_AUTOMOC TRUE)
 	# or

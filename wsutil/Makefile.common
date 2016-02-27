@@ -50,6 +50,7 @@ LIBWSUTIL_COMMON_SRC = \
 	filesystem.c	\
 	frequency-utils.c \
 	g711.c		\
+	inet_addr.c	\
 	jsmn.c		\
 	md4.c		\
 	md5.c		\
@@ -59,6 +60,7 @@ LIBWSUTIL_COMMON_SRC = \
 	plugins.c	\
 	privileges.c	\
 	sha1.c		\
+	sha2.c		\
 	sober128.c	\
 	strnatcmp.c	\
 	str_util.c	\
@@ -99,6 +101,7 @@ libwsutil_nonrepl_INCLUDES = \
 	filesystem.h	\
 	frequency-utils.h \
 	g711.h		\
+	inet_addr.h	\
 	jsmn.h		\
 	md4.h		\
 	md5.h		\
@@ -109,6 +112,7 @@ libwsutil_nonrepl_INCLUDES = \
 	privileges.h	\
 	processes.h	\
 	sha1.h		\
+	sha2.h		\
 	sign_ext.h	\
 	sober128.h	\
 	strnatcmp.h	\

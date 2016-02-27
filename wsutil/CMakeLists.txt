@@ -53,6 +53,7 @@ set(WSUTIL_FILES
 	filesystem.c
 	frequency-utils.c
 	g711.c
+	inet_addr.c
 	jsmn.c
 	md4.c
 	md5.c
@@ -62,6 +63,7 @@ set(WSUTIL_FILES
 	plugins.c
 	privileges.c
 	sha1.c
+	sha2.c
 	sober128.c
 	strnatcmp.c
 	str_util.c

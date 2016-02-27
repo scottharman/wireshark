@@ -1,5 +1,5 @@
 /*
- * randpkt-core.c
+ * randpkt_core.c
  * ---------
  * Creates random packet traces. Useful for debugging sniffers by testing
  * assumptions about the veracity of the data found in the packet.
@@ -21,7 +21,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "randpkt-core.h"
+#include "randpkt_core.h"
 
 #include <config.h>
 
@@ -505,14 +505,6 @@ static randpkt_example examples[] = {
 		1000,
 	},
 
-	{ "usb", "Universal Serial Bus",
-		PKT_USB,	WTAP_ENCAP_USB,
-		NULL,		0,
-		NULL,		0,
-		NULL,		NULL,
-		1000,
-	},
-
 	{ "usb-linux", "Universal Serial Bus with Linux specific header",
 		PKT_USB_LINUX,	WTAP_ENCAP_USB_LINUX,
 		NULL,		0,
@@ -803,11 +795,11 @@ void randpkt_example_list(const char*** abbrev_list, const char*** longname_list
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html
  *
  * Local variables:
- * c-basic-offset: 4
- * tab-width: 4
+ * c-basic-offset: 8
+ * tab-width: 8
  * indent-tabs-mode: t
  * End:
  *
- * vi: set shiftwidth=4 tabstop=4 noexpandtab:
- * :indentSize=4:tabSize=4:noTabs=false:
+ * vi: set shiftwidth=8 tabstop=8 noexpandtab:
+ * :indentSize=8:tabSize=8:noTabs=false:
  */

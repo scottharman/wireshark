@@ -148,6 +148,8 @@ static int hf_rtps_persistence                  = -1;
 static int hf_rtps_info_ts_timestamp            = -1;
 static int hf_rtps_locator_kind                 = -1;
 static int hf_rtps_locator_port                 = -1;
+static int hf_rtps_logical_port                 = -1;
+static int hf_rtps_locator_public_address_port  = -1;
 static int hf_rtps_locator_ipv4                 = -1;
 static int hf_rtps_locator_ipv6                 = -1;
 static int hf_rtps_participant_builtin_endpoints= -1;
@@ -184,7 +186,6 @@ static int hf_rtps_history_kind                 = -1;
 static int hf_rtps_data_status_info             = -1;
 static int hf_rtps_param_serialize_encap_kind   = -1;
 static int hf_rtps_param_serialize_encap_len    = -1;
-static int hf_rtps_param_status_info            = -1;
 static int hf_rtps_param_transport_priority     = -1;
 static int hf_rtps_param_type_max_size_serialized = -1;
 static int hf_rtps_param_entity_name            = -1;
@@ -330,6 +331,10 @@ static int hf_rtps_flag_data_present16                          = -1;
 static int hf_rtps_flag_offsetsn_present                        = -1;
 static int hf_rtps_flag_inline_qos16_v2                         = -1;
 static int hf_rtps_flag_timestamp_present                       = -1;
+static int hf_rtps_flag_unregistered                            = -1;
+static int hf_rtps_flag_disposed                                = -1;
+static int hf_rtps_param_status_info_flags                      = -1;
+
 static int hf_rtps_flag_participant_announcer                   = -1;
 static int hf_rtps_flag_participant_detector                    = -1;
 static int hf_rtps_flag_publication_announcer                   = -1;
@@ -494,6 +499,11 @@ static const value_string rtps_locator_kind_vals[] = {
   { LOCATOR_KIND_UDPV4,        "LOCATOR_KIND_UDPV4" },
   { LOCATOR_KIND_UDPV6,        "LOCATOR_KIND_UDPV6" },
   { LOCATOR_KIND_INVALID,      "LOCATOR_KIND_INVALID" },
+  { LOCATOR_KIND_TCPV4_LAN,    "LOCATOR_KIND_TCPV4_LAN" },
+  { LOCATOR_KIND_TCPV4_WAN,    "LOCATOR_KIND_TCPV4_WAN" },
+  { LOCATOR_KIND_TLSV4_LAN,    "LOCATOR_KIND_TLSV4_LAN" },
+  { LOCATOR_KIND_TLSV4_WAN,    "LOCATOR_KIND_TLSV4_WAN" },
+  { LOCATOR_KIND_SHMEM,        "LOCATOR_KIND_SHMEM" },
   { LOCATOR_KIND_RESERVED,     "LOCATOR_KIND_RESERVED" },
   { 0, NULL }
 };
@@ -1103,6 +1113,19 @@ static const int* INFO_REPLY_FLAGS[] = {
   NULL
 };
 
+/* It is a 4 bytes field but with these 8 bits is enough */
+static const int* STATUS_INFO_FLAGS[] = {
+  &hf_rtps_flag_reserved80,                     /* Bit 7 */
+  &hf_rtps_flag_reserved40,                     /* Bit 6 */
+  &hf_rtps_flag_reserved20,                     /* Bit 5 */
+  &hf_rtps_flag_reserved10,                     /* Bit 4 */
+  &hf_rtps_flag_reserved08,                     /* Bit 3 */
+  &hf_rtps_flag_reserved04,                     /* Bit 2 */
+  &hf_rtps_flag_unregistered,                   /* Bit 1 */
+  &hf_rtps_flag_disposed,                       /* Bit 0 */
+  NULL
+};
+
 static const int* BUILTIN_ENDPOINT_FLAGS[] = {
   &hf_rtps_flag_participant_message_datareader,     /* Bit 11 */
   &hf_rtps_flag_participant_message_datawriter,     /* Bit 10 */
@@ -1118,6 +1141,7 @@ static const int* BUILTIN_ENDPOINT_FLAGS[] = {
   &hf_rtps_flag_participant_announcer,              /* Bit 0 */
   NULL
 };
+
 /* Vendor specific: RTI */
 static const int* APP_ACK_FLAGS[] = {
   &hf_rtps_flag_reserved80,                     /* Bit 7 */
@@ -1211,7 +1235,7 @@ static wmem_map_t * registry = NULL;
 /* *********************************************************************** */
 /* Appends extra formatting for those submessages that have a status info
  */
-static void info_summary_append_ex(packet_info *pinfo,
+static void append_status_info(packet_info *pinfo,
                         guint32 writer_id,
                         guint32 status_info) {
 
@@ -1242,43 +1266,59 @@ static void info_summary_append_ex(packet_info *pinfo,
    *      1         |         1             | [ud]
    */
   /*                 0123456 */
-  char buffer[10] = "(?[??])";
+  gchar * writerId = NULL;
+  gchar * disposeFlag = NULL;
+  gchar * unregisterFlag = NULL;
+  wmem_strbuf_t *buffer = wmem_strbuf_new_label(wmem_packet_scope());
 
-  switch(writer_id)
-  {
-  case ENTITYID_PARTICIPANT:
-    buffer[1] = 'P';
-    break;
-  case ENTITYID_BUILTIN_TOPIC_WRITER:
-    buffer[1] = 't';
-    break;
-  case ENTITYID_BUILTIN_PUBLICATIONS_WRITER:
-    buffer[1] = 'w';
-    break;
-  case ENTITYID_BUILTIN_SUBSCRIPTIONS_WRITER:
-    buffer[1] = 'r';
-    break;
-  case ENTITYID_BUILTIN_SDP_PARTICIPANT_WRITER:
-    buffer[1] = 'p';
-    break;
-  case ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER:
-    buffer[1] = 'm';
-    break;
-  default:
+  switch(writer_id) {
+    case ENTITYID_PARTICIPANT:
+      writerId = "P";
+      break;
+    case ENTITYID_BUILTIN_TOPIC_WRITER:
+      writerId = "t";
+      break;
+    case ENTITYID_BUILTIN_PUBLICATIONS_WRITER:
+      writerId = "w";
+      break;
+    case ENTITYID_BUILTIN_SUBSCRIPTIONS_WRITER:
+      writerId = "r";
+      break;
+    case ENTITYID_BUILTIN_SDP_PARTICIPANT_WRITER:
+      writerId = "p";
+      break;
+    case ENTITYID_P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER:
+      writerId = "m";
+      break;
+    default:
     /* Unknown writer ID, don't format anything */
-    return;
+      break;
   }
 
   switch(status_info) {
-    case 0: buffer[3] = '_'; buffer[4] = '_'; break;
-    case 1: buffer[3] = '_'; buffer[4] = 'D'; break;
-    case 2: buffer[3] = 'U'; buffer[4] = '_'; break;
-    case 3: buffer[3] = 'U'; buffer[4] = 'D'; break;
+    case 0: unregisterFlag = "_"; disposeFlag = "_"; break;
+    case 1: unregisterFlag = "_"; disposeFlag = "D"; break;
+    case 2: unregisterFlag = "U"; disposeFlag = "_"; break;
+    case 3: unregisterFlag = "U"; disposeFlag = "D"; break;
     default:  /* Unknown status info, omit it */
-            buffer[2] = ')';
-            buffer[3] = '\0';
+      break;
   }
-  col_append_str(pinfo->cinfo, COL_INFO, buffer);
+
+  if (writerId != NULL || unregisterFlag != NULL ||
+          disposeFlag != NULL ) {
+    wmem_strbuf_append(buffer, "(");
+    if (writerId != NULL) {
+        wmem_strbuf_append(buffer, writerId);
+    }
+    if (unregisterFlag != NULL || disposeFlag != NULL) {
+      wmem_strbuf_append(buffer, "[");
+      wmem_strbuf_append(buffer, unregisterFlag);
+      wmem_strbuf_append(buffer, disposeFlag);
+      wmem_strbuf_append(buffer, "]");
+    }
+    wmem_strbuf_append(buffer, ")");
+    col_append_str(pinfo->cinfo, COL_INFO, wmem_strbuf_get_str(buffer));
+   }
 }
 
 /* *********************************************************************** */
@@ -1344,20 +1384,54 @@ void rtps_util_add_locator_t(proto_tree *tree, packet_info *pinfo, tvbuff_t *tvb
   gint32  kind;
   guint32 port;
 
-  locator_tree = proto_tree_add_subtree(tree, tvb, offset, 24, ett_rtps_locator, NULL, label);
+  locator_tree = proto_tree_add_subtree(tree, tvb, offset, 24, ett_rtps_locator,
+          NULL, label);
 
   kind = NEXT_guint32(tvb, offset, little_endian);
   port = NEXT_guint32(tvb, offset+4, little_endian);
-
   proto_tree_add_uint(locator_tree, hf_rtps_locator_kind, tvb, offset, 4, kind);
-  ti = proto_tree_add_int(locator_tree, hf_rtps_locator_port, tvb, offset+4, 4, port);
-  if (port == 0)
-    expert_add_info(pinfo, ti, &ei_rtps_locator_port);
-
-  if (kind == LOCATOR_KIND_UDPV4) {
-    proto_tree_add_item(locator_tree, hf_rtps_locator_ipv4, tvb, offset+20, 4, ENC_BIG_ENDIAN);
-  } else {
-    proto_tree_add_item(locator_tree, hf_rtps_locator_ipv6, tvb, offset+8, 16, ENC_NA);
+  switch (kind) {
+    case LOCATOR_KIND_UDPV4: {
+      ti = proto_tree_add_int(locator_tree, hf_rtps_locator_port, tvb, offset+4, 4, port);
+      proto_tree_add_item(locator_tree, hf_rtps_locator_ipv4, tvb, offset+20, 4,
+              ENC_BIG_ENDIAN);
+      if (port == 0)
+        expert_add_info(pinfo, ti, &ei_rtps_locator_port);
+      break;
+    }
+    case LOCATOR_KIND_TCPV4_LAN:
+    case LOCATOR_KIND_TCPV4_WAN:
+    case LOCATOR_KIND_TLSV4_LAN:
+    case LOCATOR_KIND_TLSV4_WAN: {
+      ti = proto_tree_add_int(locator_tree, hf_rtps_logical_port, tvb, offset+4, 4, port);
+      if (port == 0)
+        expert_add_info(pinfo, ti, &ei_rtps_locator_port);
+      kind = NEXT_guint16(tvb, offset+16, little_endian);
+      if (kind == 0xFFFF) { /* IPv4 format */
+        proto_tree_add_item(locator_tree, hf_rtps_locator_public_address_port,
+                tvb, offset+18, 2, ENC_BIG_ENDIAN);
+        proto_tree_add_item(locator_tree, hf_rtps_locator_ipv4, tvb, offset+20,
+                4, ENC_BIG_ENDIAN);
+        } else { /* IPv6 format */
+          proto_tree_add_item(locator_tree, hf_rtps_locator_ipv6, tvb, offset+8,
+                  16, ENC_NA);
+        }
+      break;
+    }
+    case LOCATOR_KIND_SHMEM: {
+      ti = proto_tree_add_int(locator_tree, hf_rtps_locator_port, tvb, offset+4,
+              4, port);
+      if (port == 0)
+        expert_add_info(pinfo, ti, &ei_rtps_locator_port);
+      break;
+    }
+    case LOCATOR_KIND_UDPV6: {
+      proto_tree_add_item(locator_tree, hf_rtps_locator_ipv6, tvb, offset+8, 16, ENC_NA);
+      break;
+    }
+    /* Default case, we already have the locator kind so don't do anything */
+    default:
+      break;
   }
 }
 
@@ -2863,7 +2937,8 @@ static void rtps_util_format_typename(gchar * type_name, gchar ** output) {
 }
 
 static gboolean rtps_util_show_topic_info(proto_tree *tree, packet_info *pinfo,
-        tvbuff_t *tvb, gint offset, endpoint_guid * guid) {
+        tvbuff_t *tvb, gint offset, endpoint_guid * guid,
+        rtps_dissector_data * data) {
   if (enable_topic_info) {
     type_mapping * type_mapping_object = rtps_util_get_topic_info(guid);
     if (type_mapping_object != NULL) {
@@ -2873,7 +2948,7 @@ static gboolean rtps_util_show_topic_info(proto_tree *tree, packet_info *pinfo,
       tvbuff_t *next_tvb;
 
       /* This part shows information available for the sample */
-      if (tree) {
+      if (data && !(data->info_displayed)) {
         topic_info_tree = proto_tree_add_subtree(tree, tvb, offset, 0,
                 ett_rtps_topic_info, NULL, "[Topic Information (from Discovery)]");
         ti = proto_tree_add_string(topic_info_tree, hf_rtps_param_topic_name, tvb, offset, 0,
@@ -2882,13 +2957,15 @@ static gboolean rtps_util_show_topic_info(proto_tree *tree, packet_info *pinfo,
         ti = proto_tree_add_string(topic_info_tree, hf_rtps_param_type_name, tvb, offset, 0,
             type_mapping_object->type_name);
         PROTO_ITEM_SET_GENERATED(ti);
+        col_append_sep_str(pinfo->cinfo, COL_INFO, " -> ", type_mapping_object->topic_name);
+        data->info_displayed = TRUE;
       }
-      col_append_sep_str(pinfo->cinfo, COL_INFO, " -> ", type_mapping_object->topic_name);
       /* This part tries to dissect the content using a dissector */
       next_tvb = tvb_new_subset_remaining(tvb, offset);
       /* After calling this API, we must call g_free in dissector_name */
       rtps_util_format_typename(type_mapping_object->type_name, &dissector_name);
-      if (dissector_try_string(rtps_type_name_table, dissector_name, next_tvb, pinfo, tree, NULL)) {
+      if (dissector_try_string(rtps_type_name_table, dissector_name,
+              next_tvb, pinfo, tree, data)) {
           g_free(dissector_name);
           return TRUE;
       } else {
@@ -4290,14 +4367,17 @@ static gboolean dissect_parameter_sequence_v2(proto_tree *rtps_parameter_tree, p
      * |    long              statusInfo                               |
      * +---------------+---------------+---------------+---------------+
      */
-    case PID_STATUS_INFO:
+    case PID_STATUS_INFO: {
       ENSURE_LENGTH(4);
       /* PID_STATUS_INFO is always coded in network byte order (big endian) */
-      proto_tree_add_item(rtps_parameter_tree, hf_rtps_param_status_info, tvb, offset, 4, ENC_BIG_ENDIAN);
+      proto_tree_add_bitmask(rtps_parameter_tree, tvb, offset,
+              hf_rtps_param_status_info_flags, ett_rtps_flags,
+              STATUS_INFO_FLAGS, ENC_BIG_ENDIAN);
       if (pStatusInfo != NULL) {
         *pStatusInfo = NEXT_guint32(tvb, offset, ENC_BIG_ENDIAN);
       }
       break;
+    }
 
     /* 0...2...........7...............15.............23...............31
     * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -4785,19 +4865,20 @@ static void dissect_serialized_data(proto_tree *tree, packet_info *pinfo, tvbuff
   proto_tree *rtps_parameter_sequence_tree;
   guint16 encapsulation_id;
   gboolean encapsulation_little_endian = FALSE;
-
+  rtps_dissector_data * data = NULL;
+  data = wmem_new(wmem_packet_scope(), rtps_dissector_data);
+  data->info_displayed = FALSE;
+  data->encapsulation_id = 0;
+  data->position_in_batch = -1;
   /* Creates the sub-tree */
   rtps_parameter_sequence_tree = proto_tree_add_subtree(tree, tvb, offset, size,
           ett_rtps_serialized_data, &ti, label);
 
-  /* Add Topic Information if enabled (checked inside). This call attemps to dissect
-   * the sample and will return TRUE if it did. We should return in that case.*/
-  if (rtps_util_show_topic_info(rtps_parameter_sequence_tree, pinfo, tvb, offset, guid))
-      return;
-
   /* Encapsulation ID */
   encapsulation_id =  NEXT_guint16(tvb, offset, ENC_BIG_ENDIAN);   /* Always big endian */
-  proto_tree_add_uint(rtps_parameter_sequence_tree, hf_rtps_param_serialize_encap_kind, tvb, offset, 2, encapsulation_id);
+  proto_tree_add_uint(rtps_parameter_sequence_tree,
+          hf_rtps_param_serialize_encap_kind, tvb, offset, 2, encapsulation_id);
+  data->encapsulation_id = encapsulation_id;
   offset += 2;
 
   /* Sets the correct values for encapsulation_le */
@@ -4809,6 +4890,12 @@ static void dissect_serialized_data(proto_tree *tree, packet_info *pinfo, tvbuff
   /* Encapsulation length (or option) */
   proto_tree_add_item(rtps_parameter_sequence_tree, hf_rtps_param_serialize_encap_len, tvb, offset, 2, ENC_BIG_ENDIAN);
   offset += 2;
+
+  /* Add Topic Information if enabled (checked inside). This call attemps to dissect
+   * the sample and will return TRUE if it did. We should return in that case.*/
+  if (rtps_util_show_topic_info(rtps_parameter_sequence_tree, pinfo, tvb,
+          offset, guid, data))
+      return;
 
   /* The payload */
   size -= 4;
@@ -5363,7 +5450,7 @@ static void dissect_DATA_v2(tvbuff_t *tvb, packet_info *pinfo, gint offset, guin
                         octets_to_next_header - (offset - old_offset) + 4,
                         "serializedData", vendor_id, from_builtin_writer, guid);
   }
-  info_summary_append_ex(pinfo, wid, status_info);
+  append_status_info(pinfo, wid, status_info);
 }
 
 static void dissect_DATA_FRAG(tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 flags,
@@ -6622,7 +6709,7 @@ static void dissect_RTPS_DATA(tvbuff_t *tvb, packet_info *pinfo, gint offset, gu
     }
   }
 
-  info_summary_append_ex(pinfo, wid, status_info);
+  append_status_info(pinfo, wid, status_info);
 }
 
 /* *********************************************************************** */
@@ -6749,7 +6836,7 @@ static void dissect_RTPS_DATA_FRAG(tvbuff_t *tvb, packet_info *pinfo, gint offse
                         octets_to_next_header - (offset - old_offset) + 4,
                         label, vendor_id, from_builtin_writer, NULL);
   }
-  info_summary_append_ex(pinfo, wid, status_info);
+  append_status_info(pinfo, wid, status_info);
 }
 
 /* *********************************************************************** */
@@ -6757,7 +6844,7 @@ static void dissect_RTPS_DATA_FRAG(tvbuff_t *tvb, packet_info *pinfo, gint offse
 /* *********************************************************************** */
 static void dissect_RTPS_DATA_BATCH(tvbuff_t *tvb, packet_info *pinfo, gint offset,
                 guint8 flags, gboolean little_endian, int octets_to_next_header,
-                proto_tree *tree, guint16 vendor_id) {
+                proto_tree *tree, guint16 vendor_id, endpoint_guid * guid) {
   /*
    *
    * 0...2...........7...............15.............23...............31
@@ -6840,6 +6927,10 @@ static void dissect_RTPS_DATA_BATCH(tvbuff_t *tvb, packet_info *pinfo, gint offs
   gint32  sample_info_count = 0,
           sample_info_max = rtps_max_batch_samples_dissected;
   proto_item *octet_item;
+  rtps_dissector_data * data = NULL;
+  data = wmem_new(wmem_packet_scope(), rtps_dissector_data);
+  data->info_displayed = FALSE;
+  data->encapsulation_id = 0;
 
   proto_tree_add_bitmask_value(tree, tvb, offset + 1, hf_rtps_sm_flags, ett_rtps_flags, RTPS_DATA_BATCH_FLAGS, flags);
 
@@ -6875,6 +6966,7 @@ static void dissect_RTPS_DATA_BATCH(tvbuff_t *tvb, packet_info *pinfo, gint offs
   /* writerEntityId */
   rtps_util_add_entity_id(tree, tvb, offset, hf_rtps_sm_wrentity_id, hf_rtps_sm_wrentity_id_key,
                         hf_rtps_sm_wrentity_id_kind, ett_rtps_wrentity, "writerEntityId", &wid);
+  guid->entity_id = wid;
   offset += 4;
 
 
@@ -6998,6 +7090,7 @@ static void dissect_RTPS_DATA_BATCH(tvbuff_t *tvb, packet_info *pinfo, gint offs
   /* Encapsulation ID for the entire data sequence */
   encapsulation_id =  NEXT_guint16(tvb, offset, FALSE);   /* Always big endian */
   proto_tree_add_uint(tree, hf_rtps_encapsulation_id, tvb, offset, 2, encapsulation_id);
+  data->encapsulation_id = encapsulation_id;
   offset += 2;
 
   /* The next two bytes are ignored */
@@ -7028,15 +7121,22 @@ static void dissect_RTPS_DATA_BATCH(tvbuff_t *tvb, packet_info *pinfo, gint offs
         return;
       }
 
+      /* We have enough bytes to dissect the next sample, so we update the rtps_dissector_data
+       * "position in the batch" value and dissect the sample */
+      data->position_in_batch = count;
       if ((sample_info_flags[count] & FLAG_SAMPLE_INFO_K) != 0) {
-        proto_tree_add_bytes_format(sil_tree, hf_rtps_serialized_key, tvb, offset, sample_info_length[count], NULL, "serializedKey[%d]", count);
+        proto_tree_add_bytes_format(sil_tree, hf_rtps_serialized_key,
+                tvb, offset, sample_info_length[count], NULL, "serializedKey[%d]", count);
       } else {
-        proto_tree_add_bytes_format(sil_tree, hf_rtps_serialized_data, tvb, offset, sample_info_length[count], NULL, "serializedData[%d]", count);
+        if (!rtps_util_show_topic_info(sil_tree, pinfo, tvb, offset, guid, data)) {
+          proto_tree_add_bytes_format(sil_tree, hf_rtps_serialized_data,
+                  tvb, offset, sample_info_length[count], NULL, "serializedData[%d]", count);
+        }
       }
       offset += sample_info_length[count];
     }
   }
-  info_summary_append_ex(pinfo, wid, status_info);
+  append_status_info(pinfo, wid, status_info);
 }
 
 /* *********************************************************************** */
@@ -7502,7 +7602,7 @@ static gboolean dissect_rtps_submessage_v2(tvbuff_t *tvb, packet_info *pinfo, gi
 
     case SUBMESSAGE_RTPS_DATA_BATCH:
       dissect_RTPS_DATA_BATCH(tvb, pinfo, offset, flags, little_endian, octets_to_next_header,
-                                rtps_submessage_tree, vendor_id);
+                                rtps_submessage_tree, vendor_id, guid);
       break;
 
     default:
@@ -8488,6 +8588,18 @@ void proto_register_rtps(void) {
         NULL, HFILL }
     },
 
+    { &hf_rtps_logical_port,
+      { "RTPS Logical Port", "rtps.locator.port",
+        FT_INT32, BASE_DEC, NULL, 0,
+        NULL, HFILL }
+    },
+
+    { &hf_rtps_locator_public_address_port,
+      { "Public Address Port", "rtps.locator.public_address_port",
+        FT_INT32, BASE_DEC, NULL, 0,
+        NULL, HFILL }
+    },
+
     { &hf_rtps_locator_ipv4,
       { "Address", "rtps.locator.ipv4",
         FT_IPv4, BASE_NONE, NULL, 0,
@@ -8762,13 +8874,6 @@ void proto_register_rtps(void) {
       { "encapsulation options", "rtps.param.serialize.encap_len",
         FT_UINT16, BASE_HEX, NULL, 0,
         NULL, HFILL }
-    },
-
-    { &hf_rtps_param_status_info,
-      { "statusInfo", "rtps.param.statusInfo",
-        FT_UINT32, BASE_HEX, NULL, 0,
-        "State information of the data object to which the message apply (i.e. lifecycle)",
-        HFILL }
     },
 
     /* Parameter / NtpTime ------------------------------------------------- */
@@ -9452,6 +9557,20 @@ void proto_register_rtps(void) {
     { &hf_rtps_flag_timestamp_present, {
         "Timestamp present", "rtps.flag.offsetsn_present",
         FT_BOOLEAN, 16, TFS(&tfs_set_notset), 0x0001, NULL, HFILL }
+    },
+    { &hf_rtps_param_status_info_flags,
+      { "Flags", "rtps.param.status_info",
+        FT_UINT32, BASE_HEX, NULL, 0,
+        "bitmask representing the flags in PID_STATUS_INFO",
+        HFILL }
+    },
+    { &hf_rtps_flag_unregistered, {
+        "Unregistered", "rtps.flag.unregistered",
+        FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x0002, NULL, HFILL }
+    },
+    { &hf_rtps_flag_disposed, {
+        "Disposed", "rtps.flag.undisposed",
+        FT_BOOLEAN, 8, TFS(&tfs_set_notset), 0x0001, NULL, HFILL }
     },
     { &hf_rtps_flag_participant_announcer, {
         "Participant Announcer", "rtps.flag.participant_announcer",
