@@ -54,10 +54,6 @@
 #include <getopt.h>
 #endif
 
-#ifdef HAVE_LIBZ
-#include <zlib.h>     /* to get the libz version number */
-#endif
-
 #include <wiretap/wtap.h>
 
 #include "epan/etypes.h"
@@ -87,8 +83,8 @@
 #include <wsutil/report_err.h>
 #include <wsutil/strnatcmp.h>
 #include <wsutil/str_util.h>
-#include <wsutil/ws_diag_control.h>
 #include <wsutil/ws_version_info.h>
+#include <wsutil/pint.h>
 #include <wiretap/wtap_opttypes.h>
 #include <wiretap/pcapng.h>
 
@@ -398,13 +394,12 @@ set_time_adjustment(char *optarg_str_p)
 
     /* adjust fractional portion from fractional to numerator
      * e.g., in "1.5" from 5 to 500000000 since .5*10^9 = 500000000 */
-    if (frac && end) {            /* both are valid */
-        frac_digits = end - frac - 1;   /* fractional digit count (remember '.') */
-        while(frac_digits < 9) {    /* this is frac of 10^9 */
-            val *= 10;
-            frac_digits++;
-        }
+    frac_digits = end - frac - 1;   /* fractional digit count (remember '.') */
+    while(frac_digits < 9) {    /* this is frac of 10^9 */
+        val *= 10;
+        frac_digits++;
     }
+
     time_adj.tv.nsecs = (int)val;
 }
 
@@ -472,13 +467,12 @@ set_strict_time_adj(char *optarg_str_p)
 
     /* adjust fractional portion from fractional to numerator
      * e.g., in "1.5" from 5 to 500000000 since .5*10^9 = 500000000 */
-    if (frac && end) {            /* both are valid */
-        frac_digits = end - frac - 1;   /* fractional digit count (remember '.') */
-        while(frac_digits < 9) {    /* this is frac of 10^9 */
-            val *= 10;
-            frac_digits++;
-        }
+    frac_digits = end - frac - 1;   /* fractional digit count (remember '.') */
+    while(frac_digits < 9) {    /* this is frac of 10^9 */
+        val *= 10;
+        frac_digits++;
     }
+
     strict_time_adj.tv.nsecs = (int)val;
 }
 
@@ -540,13 +534,12 @@ set_rel_time(char *optarg_str_p)
 
     /* adjust fractional portion from fractional to numerator
      * e.g., in "1.5" from 5 to 500000000 since .5*10^9 = 500000000 */
-    if (frac && end) {            /* both are valid */
-        frac_digits = end - frac - 1;   /* fractional digit count (remember '.') */
-        while(frac_digits < 9) {    /* this is frac of 10^9 */
-            val *= 10;
-            frac_digits++;
-        }
+    frac_digits = end - frac - 1;   /* fractional digit count (remember '.') */
+    while(frac_digits < 9) {    /* this is frac of 10^9 */
+        val *= 10;
+        frac_digits++;
     }
+
     relative_time_window.nsecs = (int)val;
 }
 
@@ -554,7 +547,7 @@ set_rel_time(char *optarg_str_p)
 #define VLAN_SIZE 4
 static void
 sll_remove_vlan_info(guint8* fd, guint32* len) {
-    if (g_ntohs(*(fd + LINUX_SLL_OFFSETP)) == ETHERTYPE_VLAN) {
+    if (pntoh16(fd + LINUX_SLL_OFFSETP) == ETHERTYPE_VLAN) {
         int rest_len;
         /* point to start of vlan */
         fd = fd + LINUX_SLL_OFFSETP;
@@ -910,32 +903,6 @@ failure_message(const char *msg_format _U_, va_list ap _U_)
 }
 #endif
 
-static void
-get_editcap_compiled_info(GString *str)
-{
-  /* LIBZ */
-  g_string_append(str, ", ");
-#ifdef HAVE_LIBZ
-  g_string_append(str, "with libz ");
-#ifdef ZLIB_VERSION
-  g_string_append(str, ZLIB_VERSION);
-#else /* ZLIB_VERSION */
-  g_string_append(str, "(version unknown)");
-#endif /* ZLIB_VERSION */
-#else /* HAVE_LIBZ */
-  g_string_append(str, "without libz");
-#endif /* HAVE_LIBZ */
-}
-
-static void
-get_editcap_runtime_info(GString *str)
-{
-  /* zlib */
-#if defined(HAVE_LIBZ) && !defined(_WIN32)
-  g_string_append_printf(str, ", with libz %s", zlibVersion());
-#endif
-}
-
 static wtap_dumper *
 editcap_dump_open(const char *filename, guint32 snaplen,
                   wtap_optionblock_t shb_hdr,
@@ -1014,10 +981,10 @@ main(int argc, char *argv[])
 #endif /* _WIN32 */
 
     /* Get the compile-time version information string */
-    comp_info_str = get_compiled_version_info(NULL, get_editcap_compiled_info);
+    comp_info_str = get_compiled_version_info(NULL, NULL);
 
     /* Get the run-time version information string */
-    runtime_info_str = get_runtime_version_info(get_editcap_runtime_info);
+    runtime_info_str = get_runtime_version_info(NULL);
 
     /* Add it to the information to be reported on a crash. */
     ws_add_crash_info("Editcap (Wireshark) %s\n"

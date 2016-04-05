@@ -140,7 +140,7 @@ gboolean ws_init_dll_search_path();
  */
 
 WS_DLL_PUBLIC
-void *ws_load_library(gchar *library_name);
+void *ws_load_library(const gchar *library_name);
 
 /** Load a DLL using g_module_open.
  * Only the system and program directories are searched.
@@ -151,11 +151,6 @@ void *ws_load_library(gchar *library_name);
  */
 WS_DLL_PUBLIC
 GModule *ws_module_open(gchar *module_name, GModuleFlags flags);
-
-/*
- * utf8 version of getenv, needed to get win32 filename paths
- */
-WS_DLL_PUBLIC char *getenv_utf8(const char *varname);
 
 /** Create or open a "Wireshark is running" mutex.
  * Create or open a mutex which signals that Wireshark or its associated

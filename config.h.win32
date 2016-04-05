@@ -41,8 +41,6 @@
 #define HAVE_PLUGINS		1
 #define HAVE_EXTCAP		1
 
-/* #undef HAVE_SA_LEN */
-
 /* #undef HAVE_MKSTEMP */
 /* #undef HAVE_MKDTEMP */
 
@@ -146,12 +144,6 @@
 /* Define if you have the <sys/wait.h> header file.  */
 /* #undef HAVE_SYS_WAIT_H */
 
-/* Define if tm_zone field exists in struct tm */
-/* #undef HAVE_TM_ZONE 1 */
-
-/* Define if tzname array exists */
-/* #undef HAVE_TZNAME */
-
 /* Define if you have the <unistd.h> header file.  */
 /* #define HAVE_UNISTD_H 1 */
 
@@ -165,19 +157,13 @@
 /* #define INTTYPES_H_DEFINES_FORMATS */
 
 /* Define if you have the z library (-lz).  */
-@HAVE_LIBZ@
-#ifdef HAVE_LIBZ
+@HAVE_ZLIB@
+#ifdef HAVE_ZLIB
 #define HAVE_INFLATEPRIME 1
 #endif
 
-/* Define to use GNU ADNS library */
+/* Define to use c-ares library */
 @HAVE_C_ARES@
-
-/* Define to use GNU ADNS library */
-#ifndef HAVE_C_ARES
-@HAVE_GNU_ADNS@
-#define ADNS_JGAA_WIN32 1
-#endif
 
 /* Define to use the gnutls library */
 @HAVE_LIBGNUTLS@
@@ -274,3 +260,5 @@ typedef int ssize_t;
 
 /* to use define _ws_mempbrk_sse42 if available (checked with cpuinfo)  */
 #define HAVE_SSE4_2 1
+
+#include <ws_diag_control.h>

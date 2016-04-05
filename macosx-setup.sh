@@ -52,7 +52,7 @@ TARGET_PLATFORM=macx-clang
 # Some packages need xz to unpack their current source.
 # xz is not yet provided with OS X.
 #
-XZ_VERSION=5.0.4
+XZ_VERSION=5.0.8
 
 #
 # In case we want to build with cmake.
@@ -147,13 +147,12 @@ DARWIN_MAJOR_VERSION=`uname -r | sed 's/\([0-9]*\).*/\1/'`
 
 #
 # GNU autotools; they're provided with releases up to Snow Leopard, but
-# not in later releases.
+# not in later releases, and the Snow Leopard version is too old for
+# current Wireshark, so we install them unconditionally.
 #
-if [ -n "$AUTOTOOLS" -a $DARWIN_MAJOR_VERSION -gt 10 ]; then
-    AUTOCONF_VERSION=2.69
-    AUTOMAKE_VERSION=1.13.3
-    LIBTOOL_VERSION=2.4.2
-fi
+AUTOCONF_VERSION=2.69
+AUTOMAKE_VERSION=1.13.3
+LIBTOOL_VERSION=2.4.2
 
 install_xz() {
     if [ "$XZ_VERSION" -a ! -f xz-$XZ_VERSION-done ] ; then
@@ -469,7 +468,7 @@ uninstall_gettext() {
 install_pkg_config() {
     if [ ! -f pkg-config-$PKG_CONFIG_VERSION-done ] ; then
         echo "Downloading, building, and installing pkg-config:"
-        [ -f pkg-config-$PKG_CONFIG_VERSION.tar.gz ] || curl -O http://pkgconfig.freedesktop.org/releases/pkg-config-$PKG_CONFIG_VERSION.tar.gz || exit 1
+        [ -f pkg-config-$PKG_CONFIG_VERSION.tar.gz ] || curl -O https://pkgconfig.freedesktop.org/releases/pkg-config-$PKG_CONFIG_VERSION.tar.gz || exit 1
         gzcat pkg-config-$PKG_CONFIG_VERSION.tar.gz | tar xf - || exit 1
         cd pkg-config-$PKG_CONFIG_VERSION
         ./configure --with-internal-glib || exit 1

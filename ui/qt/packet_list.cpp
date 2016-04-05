@@ -503,6 +503,8 @@ void PacketList::selectionChanged (const QItemSelection & selected, const QItemS
         if (fi && proto_tree_) {
             proto_tree_->selectField(fi);
         }
+    } else if (!cap_file_->search_in_progress) {
+        proto_tree_->restoreSelectedField();
     }
 }
 
@@ -559,17 +561,18 @@ void PacketList::contextMenuEvent(QContextMenuEvent *event)
 // scrollToBottom() from rowsInserted().
 void PacketList::timerEvent(QTimerEvent *event)
 {
-    QTreeView::timerEvent(event);
-
-    if (event->timerId() == tail_timer_id_
-            && rows_inserted_
-            && capture_in_progress_
-            && tail_at_end_) {
-        scrollToBottom();
-        rows_inserted_ = false;
-    } else if (event->timerId() == overlay_timer_id_ && !capture_in_progress_) {
-        if (create_near_overlay_) drawNearOverlay();
-        if (create_far_overlay_) drawFarOverlay();
+    if (event->timerId() == tail_timer_id_) {
+        if (rows_inserted_ && capture_in_progress_ && tail_at_end_) {
+            scrollToBottom();
+            rows_inserted_ = false;
+        }
+    } else if (event->timerId() == overlay_timer_id_) {
+        if (!capture_in_progress_) {
+            if (create_near_overlay_) drawNearOverlay();
+            if (create_far_overlay_) drawFarOverlay();
+        }
+    } else {
+        QTreeView::timerEvent(event);
     }
 }
 

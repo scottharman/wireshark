@@ -21,8 +21,6 @@
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
 
-ACLOCAL_AMFLAGS = `../aclocal-flags`
-
 AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) -DWS_BUILD_DLL \
 	-DTOP_SRCDIR=\"$(abs_top_srcdir)\" 	\
 	-DDATAFILE_DIR=\"$(pkgdatadir)\" 	\
@@ -44,14 +42,7 @@ libwsutil_abi_INCLUDES = 	\
 
 # Optional objects that I know how to build. These will be
 # linked into libwsutil if necessary.
-wsutil_optional_objects = \
-	@FLOORL_LO@		\
-	@GETOPT_LO@		\
-	@INET_ATON_LO@		\
-	@INET_NTOP_LO@		\
-	@INET_PTON_LO@		\
-	@POPCOUNT_LO@		\
-	@STRPTIME_LO@
+wsutil_optional_objects =
 
 if SSE42_SUPPORTED
 wsutil_optional_objects += libwsutil_sse42.la
@@ -71,41 +62,27 @@ LIBWSUTIL_SRC += cfutils.c
 LIBWSUTIL_INCLUDES += cfutils.h
 endif
 
-libwsutil_la_SOURCES = \
-	$(LIBWSUTIL_SRC)	\
-	$(LIBWSUTIL_INCLUDES)
-
 libwsutil_sse42_la_SOURCES = \
 	ws_mempbrk_sse42.c
 
 libwsutil_sse42_la_CFLAGS = $(AM_CFLAGS) $(CFLAGS_SSE42)
 
-EXTRA_libwsutil_la_SOURCES = \
-	floorl.c		\
-	floorl.h		\
-	inet_aton.c		\
-	inet_aton.h		\
-	inet_ntop.c		\
-	inet_pton.c		\
-	inet_addr-int.h		\
-	popcount.c		\
-	popcount.h		\
-	strptime.c		\
-	strptime.h		\
-	wsgetopt.c		\
-	wsgetopt.h		\
-	wsgetopt_int.h
+libwsutil_la_SOURCES = \
+	$(LIBWSUTIL_SRC)	\
+	$(LIBWSUTIL_INCLUDES)
 
-libwsutil_la_DEPENDENCIES = \
+EXTRA_libwsutil_la_DEPENDENCIES = \
 	$(wsutil_optional_objects)
 
 libwsutil_la_LIBADD = \
+	$(LTLIBOBJS)		\
 	@COREFOUNDATION_FRAMEWORKS@	\
 	@GLIB_LIBS@		\
 	@LIBGCRYPT_LIBS@	\
 	$(wsutil_optional_objects)
 
 EXTRA_DIST = \
+	.editorconfig	\
 	cfutils.c	\
 	cfutils.h	\
 	CMakeLists.txt	\
@@ -113,7 +90,20 @@ EXTRA_DIST = \
 	Makefile.nmake	\
 	file_util.c	\
 	file_util.h	\
-	wsgcrypt.h
+	getopt_long.c	\
+	getopt_long.h	\
+	inet_addr-int.h	\
+	inet_aton.c	\
+	inet_aton.h	\
+	inet_ntop.c	\
+	inet_pton.c	\
+	popcount.c	\
+	popcount.h	\
+	strptime.c	\
+	strptime.h	\
+	ws_mempbrk_sse42.c \
+	wsgcrypt.h	\
+	wsgetopt.h
 
 CLEANFILES = \
 	libwsutil.a	\

@@ -31,6 +31,9 @@
 /* Define to 1 if we want to enable plugins */
 #cmakedefine HAVE_PLUGINS 1
 
+/*  Define to 1 if we check hf conflict */
+#cmakedefine ENABLE_CHECK_FILTER 1
+
 /* Link plugins statically into Wireshark */
 #cmakedefine ENABLE_STATIC 1
 
@@ -64,6 +67,12 @@
 /* Define if GeoIP supports IPv6 (GeoIP 1.4.5 and later) */
 #cmakedefine HAVE_GEOIP_V6 1
 
+/* Define to 1 if you have the <ifaddrs.h> header file. */
+#cmakedefine HAVE_IFADDRS_H 1
+
+/* Define to 1 if you have the `getifaddrs' function. */
+#cmakedefine HAVE_GETIFADDRS 1
+
 /* Define if LIBSSH support is enabled */
 #cmakedefine HAVE_LIBSSH 1
 
@@ -79,12 +88,6 @@
 /* Define to 1 if you have the `getaddrinfo' function. */
 #cmakedefine HAVE_GETADDRINFO 1
 
-/* Define to 1 if you have the `gethostbyname' function. */
-#cmakedefine HAVE_GETHOSTBYNAME 1
-
-/* Define to 1 if you have the `gethostbyname2' function. */
-#cmakedefine HAVE_GETHOSTBYNAME2 1
-
 /* Define to 1 if you have the getopt_long function. */
 #cmakedefine HAVE_GETOPT_LONG 1
 
@@ -97,9 +100,6 @@
 /* Define to 1 if you have the `getprotobynumber' function. */
 #cmakedefine HAVE_GETPROTOBYNUMBER 1
 
-/* Define to use GNU ADNS library */
-#cmakedefine HAVE_GNU_ADNS 1
-
 /* Define to 1 if you have the <grp.h> header file. */
 #cmakedefine HAVE_GRP_H 1
 
@@ -109,8 +109,8 @@
 /* Define to 1 if you have the `inet_aton' function. */
 #cmakedefine HAVE_INET_ATON 1
 
-/* Define if inet_ntop() prototype exists */
-#cmakedefine HAVE_INET_NTOP_PROTO 1
+/* Define to 1 if you have the `inet_ntop' function. */
+#cmakedefine HAVE_INET_NTOP 1
 
 /* Define to 1 if you have the `inet_pton' function. */
 #cmakedefine HAVE_INET_PTON 1
@@ -157,8 +157,8 @@
 /* Define to 1 if you have the `smi' library (-lsmi). */
 #cmakedefine HAVE_LIBSMI 1
 
-/* Define to use libz library */
-#cmakedefine HAVE_LIBZ 1
+/* Define to use zlib library */
+#cmakedefine HAVE_ZLIB 1
 
 /* Define to 1 if you have the <linux/sockios.h> header file. */
 #cmakedefine HAVE_LINUX_SOCKIOS_H 1
@@ -204,6 +204,9 @@
 
 /* SPLIT_WIPHY_DUMP is supported */
 #cmakedefine HAVE_NL80211_SPLIT_WIPHY_DUMP 1
+
+/* VHT_CAPABILITY is supported */
+#cmakedefine HAVE_NL80211_VHT_CAPABILITY 1
 
 /* Define to 1 if you have the <Ntddndis.h> header file. */
 #cmakedefine HAVE_NTDDNDIS_H 1
@@ -286,7 +289,7 @@
 #cmakedefine HAVE_REMOTE 1
 
 /* Define if sa_len field exists in struct sockaddr */
-#cmakedefine HAVE_SA_LEN 1
+#cmakedefine HAVE_SOCKADDR_SA_LEN 1
 
 /* Define to 1 if you want to playing SBC by standalone BlueZ SBC library */
 #cmakedefine HAVE_SBC 1
@@ -310,7 +313,7 @@
 #cmakedefine HAVE_STRPTIME 1
 
 /* Define if st_flags field exists in struct stat */
-#cmakedefine HAVE_ST_FLAGS 1
+#cmakedefine HAVE_STAT_ST_FLAGS 1
 
 /* Define to 1 if you have the `sysconf' function. */
 #cmakedefine HAVE_SYSCONF 1
@@ -343,7 +346,7 @@
 #cmakedefine HAVE_SYS_WAIT_H 1
 
 /* Define if tm_zone field exists in struct tm */
-#cmakedefine HAVE_TM_ZONE 1
+#cmakedefine HAVE_STRUCT_TM_TM_ZONE 1
 
 /* Define if tzname array exists */
 #cmakedefine HAVE_TZNAME 1
@@ -470,3 +473,5 @@
 
 #  define NEED_STRPTIME_H 1
 #endif
+
+#include <ws_diag_control.h>

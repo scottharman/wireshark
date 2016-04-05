@@ -33,6 +33,10 @@
 
 #include <glib.h>
 
+#ifdef HAVE_ZLIB
+#include <zlib.h>
+#endif
+
 #include "version.h"
 
 #include <wsutil/ws_version_info.h>
@@ -69,6 +73,20 @@ end_string(GString *str)
 		}
 		p = q + 1;
 	}
+}
+
+static const gchar *
+get_zlib_compiled_version_info(void)
+{
+#ifdef HAVE_ZLIB
+#ifdef ZLIB_VERSION
+	return "with zlib "ZLIB_VERSION;
+#else
+	return "with zlib (version unknown)";
+#endif /* ZLIB_VERSION */
+#else
+	return "without zlib";
+#endif /* HAVE_ZLIB */
 }
 
 /*
@@ -112,6 +130,8 @@ get_compiled_version_info(void (*prepend_info)(GString *),
 	    "GLib (version unknown)");
 #endif
 
+	g_string_append_printf(str, ", %s", get_zlib_compiled_version_info());
+
 	/* Additional application-dependent information */
 	if (append_info)
 		(*append_info)(str);
@@ -126,7 +146,7 @@ get_compiled_version_info(void (*prepend_info)(GString *),
  * Get the CPU info, and append it to the GString
  */
 static void
-get_cpu_info(GString *str _U_)
+get_cpu_info(GString *str)
 {
 	guint32 CPUInfo[4];
 	char CPUBrandString[0x40];
@@ -268,6 +288,24 @@ get_compiler_info(GString *str)
 #endif
 }
 
+/* XXX - is the setlocale() return string opaque? For glibc the separator is ';' */
+static gchar *
+get_locale(void)
+{
+	const gchar *lang;
+	gchar **locv, *loc;
+
+	lang = setlocale(LC_ALL, NULL);
+	if (lang == NULL) {
+		return NULL;
+	}
+
+	locv = g_strsplit(lang, ";", -1);
+	loc = g_strjoinv(", ", locv);
+	g_strfreev(locv);
+	return loc;
+}
+
 /*
  * Get various library run-time versions, and the OS version, and append
  * them to the specified GString.
@@ -303,14 +341,23 @@ get_runtime_version_info(void (*additional_info)(GString *))
 	 * 65001, i.e. UTF-8, as your system code page probably
 	 * works best with Wireshark.)
 	 */
-	if ((lang = setlocale(LC_ALL, NULL)) != NULL)
+	if ((lang = get_locale()) != NULL) {
 		g_string_append_printf(str, ", with locale %s", lang);
-	else
+		g_free(lang);
+	}
+	else {
 		g_string_append(str, ", with default locale");
+	}
+
 
 	/* Additional application-dependent information */
 	if (additional_info)
 		(*additional_info)(str);
+
+	/* zlib */
+#if defined(HAVE_ZLIB) && !defined(_WIN32)
+	g_string_append_printf(str, ", with zlib %s", zlibVersion());
+#endif
 
 	g_string_append(str, ".");
 

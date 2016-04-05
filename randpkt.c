@@ -21,13 +21,22 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <config.h>
+
 #include <glib.h>
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <wsutil/ws_diag_control.h>
 #include <wsutil/unicode-utils.h>
 #include <wsutil/file_util.h>
+#include <wsutil/filesystem.h>
+#include <wsutil/privileges.h>
 
+#ifdef HAVE_PLUGINS
+#include <wsutil/plugins.h>
+#endif
+
+#include <wsutil/report_err.h>
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
 #endif
@@ -38,15 +47,27 @@
 
 #include "randpkt_core/randpkt_core.h"
 
+#ifdef HAVE_PLUGINS
+/*
+ *  Don't report failures to load plugins because most (non-wiretap) plugins
+ *  *should* fail to load (because we're not linked against libwireshark and
+ *  dissector plugins need libwireshark).
+ */
+static void
+failure_message(const char *msg_format _U_, va_list ap _U_)
+{
+  return;
+}
+#endif
+
 /* Print usage statement and exit program */
 static void
 usage(gboolean is_error)
 {
 	FILE *output;
-	const char** abbrev_list;
-	const char** longname_list;
-	unsigned list_num;
-	unsigned i;
+	char** abbrev_list;
+	char** longname_list;
+	unsigned i = 0;
 
 	if (!is_error) {
 		output = stdout;
@@ -63,12 +84,14 @@ usage(gboolean is_error)
 	fprintf(output, "Types:\n");
 
 	/* Get the examples list */
-	randpkt_example_list(&abbrev_list, &longname_list, &list_num);
-	for (i = 0; i < list_num; i++) {
+	randpkt_example_list(&abbrev_list, &longname_list);
+	while (abbrev_list[i] && longname_list[i]) {
 		fprintf(output, "\t%-16s%s\n", abbrev_list[i], longname_list[i]);
+		i++;
 	}
-	g_free((char**)abbrev_list);
-	g_free((char**)longname_list);
+
+	g_strfreev(abbrev_list);
+	g_strfreev(longname_list);
 
 	fprintf(output, "\nIf type is not specified, a random packet will be chosen\n\n");
 
@@ -91,10 +114,40 @@ main(int argc, char **argv)
 		{0, 0, 0, 0 }
 	};
 
+#ifdef HAVE_PLUGINS
+	char  *init_progfile_dir_error;
+#endif
+
+  /*
+   * Get credential information for later use.
+   */
+  init_process_policies();
+  init_open_routines();
+
 #ifdef _WIN32
 	arg_list_utf_16to8(argc, argv);
 	create_app_running_mutex();
 #endif /* _WIN32 */
+
+#ifdef HAVE_PLUGINS
+	/* Register wiretap plugins */
+	if ((init_progfile_dir_error = init_progfile_dir(argv[0], main))) {
+		g_warning("randpkt: init_progfile_dir(): %s", init_progfile_dir_error);
+		g_free(init_progfile_dir_error);
+	} else {
+		/* Register all the plugin types we have. */
+		wtap_register_plugin_types(); /* Types known to libwiretap */
+
+		init_report_err(failure_message,NULL,NULL,NULL);
+
+		/* Scan for plugins.  This does *not* call their registration routines;
+		   that's done later. */
+		scan_plugins();
+
+		/* Register all libwiretap plugin modules. */
+		register_all_wiretap_modules();
+	}
+#endif
 
 	while ((opt = getopt_long(argc, argv, "b:c:ht:r", long_options, NULL)) != -1) {
 		switch (opt) {

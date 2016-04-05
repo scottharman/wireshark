@@ -40,10 +40,6 @@
 #include <signal.h>
 #endif
 
-#ifdef HAVE_LIBZ
-#include <zlib.h>      /* to get the libz version number */
-#endif
-
 #ifdef HAVE_LIBCAP
 # include <sys/capability.h>
 #endif
@@ -65,7 +61,6 @@
 #include <wsutil/file_util.h>
 #include <wsutil/privileges.h>
 #include <wsutil/report_err.h>
-#include <wsutil/ws_diag_control.h>
 #include <wsutil/ws_version_info.h>
 #include <wiretap/wtap_opttypes.h>
 #include <wiretap/pcapng.h>
@@ -921,19 +916,6 @@ get_tshark_compiled_version_info(GString *str)
 {
   /* Capture libraries */
   get_compiled_caplibs_version(str);
-
-  /* LIBZ */
-  g_string_append(str, ", ");
-#ifdef HAVE_LIBZ
-  g_string_append(str, "with libz ");
-#ifdef ZLIB_VERSION
-  g_string_append(str, ZLIB_VERSION);
-#else /* ZLIB_VERSION */
-  g_string_append(str, "(version unknown)");
-#endif /* ZLIB_VERSION */
-#else /* HAVE_LIBZ */
-  g_string_append(str, "without libz");
-#endif /* HAVE_LIBZ */
 }
 
 static void
@@ -943,11 +925,6 @@ get_tshark_runtime_version_info(GString *str)
     /* Capture libraries */
     g_string_append(str, ", ");
     get_runtime_caplibs_version(str);
-#endif
-
-    /* zlib */
-#if defined(HAVE_LIBZ) && !defined(_WIN32)
-    g_string_append_printf(str, ", with libz %s", zlibVersion());
 #endif
 
     /* stuff used by libwireshark */
@@ -1102,6 +1079,9 @@ main(int argc, char *argv[])
       get_ws_vcs_version_info(), comp_info_str->str, runtime_info_str->str);
   g_string_free(comp_info_str, TRUE);
   g_string_free(runtime_info_str, TRUE);
+
+  /* Fail sometimes. Useful for testing fuzz scripts. */
+  /* if (g_random_int_range(0, 100) < 5) abort(); */
 
   /*
    * In order to have the -X opts assigned before the wslua machine starts
@@ -1550,8 +1530,7 @@ main(int argc, char *argv[])
       if (badopt != '\0') {
         cmdarg_err("-N specifies unknown resolving option '%c'; valid options are:",
                    badopt);
-        cmdarg_err_cont("\t'C' to enable concurrent (asynchronous) DNS lookups\n"
-                        "\t'd' to enable address resolution from captured DNS packets\n"
+        cmdarg_err_cont("\t'd' to enable address resolution from captured DNS packets\n"
                         "\t'm' to enable MAC address resolution\n"
                         "\t'n' to enable network address resolution\n"
                         "\t'N' to enable using external resolvers (e.g., DNS)\n"
@@ -3003,7 +2982,7 @@ process_packet_first_pass(capture_file *cf, epan_dissect_t *edt,
      do a dissection and do so. */
   if (edt) {
     if (gbl_resolv_flags.mac_name || gbl_resolv_flags.network_name ||
-        gbl_resolv_flags.transport_name || gbl_resolv_flags.concurrent_dns)
+        gbl_resolv_flags.transport_name)
       /* Grab any resolved addresses */
       host_name_lookup_process();
 
@@ -3076,7 +3055,7 @@ process_packet_second_pass(capture_file *cf, epan_dissect_t *edt, frame_data *fd
      do a dissection and do so. */
   if (edt) {
     if (gbl_resolv_flags.mac_name || gbl_resolv_flags.network_name ||
-        gbl_resolv_flags.transport_name || gbl_resolv_flags.concurrent_dns)
+        gbl_resolv_flags.transport_name)
       /* Grab any resolved addresses */
       host_name_lookup_process();
 
@@ -3715,7 +3694,7 @@ process_packet(capture_file *cf, epan_dissect_t *edt, gint64 offset, struct wtap
      do a dissection and do so. */
   if (edt) {
     if (print_packet_info && (gbl_resolv_flags.mac_name || gbl_resolv_flags.network_name ||
-        gbl_resolv_flags.transport_name || gbl_resolv_flags.concurrent_dns))
+        gbl_resolv_flags.transport_name))
       /* Grab any resolved addresses */
       host_name_lookup_process();
 

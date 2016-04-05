@@ -517,13 +517,12 @@ file_import_open(text_import_info_t *info)
         goto end;
     }
 
-    text_import_setup(info);
-
-    text_importin = info->import_text_file;
-
-    text_importlex();
-
-    text_import_cleanup();
+    err = text_import(info);
+    if (err != 0) {
+        failure_alert_box("Can't initialize scanner: %s", g_strerror(err));
+        fclose(info->import_text_file);
+        goto end;
+    }
 
     if (fclose(info->import_text_file)) {
         read_failure_alert_box(info->import_text_filename, errno);

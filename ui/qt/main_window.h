@@ -53,15 +53,15 @@
 #include "capture_file.h"
 #include "capture_file_dialog.h"
 #include "capture_file_properties_dialog.h"
-#include "capture_interfaces_dialog.h"
 #include "display_filter_combo.h"
-#include "file_set_dialog.h"
 #include "filter_action.h"
 #include "follow_stream_dialog.h"
 #include "preferences_dialog.h"
 
 class AccordionFrame;
 class ByteViewTab;
+class CaptureInterfacesDialog;
+class FileSetDialog;
 class FunnelStatistics;
 class MainWelcome;
 class PacketList;
@@ -143,7 +143,7 @@ private:
     PacketList *packet_list_;
     ProtoTree *proto_tree_;
     QWidget *previous_focus_;
-    FileSetDialog file_set_dialog_;
+    FileSetDialog *file_set_dialog_;
     ByteViewTab *byte_view_tab_;
     QWidget empty_pane_;
     QActionGroup *show_hide_actions_;
@@ -159,7 +159,7 @@ private:
     bool capture_filter_valid_;
 #ifdef HAVE_LIBPCAP
     capture_session cap_session_;
-    CaptureInterfacesDialog capture_interfaces_dialog_;
+    CaptureInterfacesDialog *capture_interfaces_dialog_;
     info_data_t info_data_;
 #endif
 
@@ -224,6 +224,8 @@ signals:
     void monospaceFontChanged(const QFont &mono_font);
     void closePacketDialogs();
     void reloadFields();
+    void packetInfoChanged(struct _packet_info *pinfo);
+    void fieldFilterChanged(const QByteArray field_filter);
 
 public slots:
     // in main_window_slots.cpp
@@ -277,6 +279,7 @@ private slots:
     // Manually connected slots (no "on_<object>_<signal>").
 
     void initViewColorizeMenu();
+    void initConversationMenus();
 
     // in main_window_slots.cpp
     /**
@@ -608,7 +611,7 @@ private slots:
 
     void changeEvent(QEvent* event);
 
-#if HAVE_EXTCAP
+#ifdef HAVE_EXTCAP
     void extcap_options_finished(int result);
     void showExtcapOptionsDialog(QString & device_name);
 #endif

@@ -24,7 +24,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "config.h"
+#include <config.h>
 
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
@@ -44,10 +44,6 @@
 #include "wsutil/wsgetopt.h"
 #endif
 
-#ifdef HAVE_LIBZ
-#include <zlib.h>      /* to get the libz version number */
-#endif
-
 #ifdef HAVE_EXTCAP
 #include <extcap.h>
 #endif
@@ -63,8 +59,6 @@
 #include <wsutil/file_util.h>
 #include <wsutil/privileges.h>
 #include <wsutil/report_err.h>
-#include <wsutil/u3.h>
-#include <wsutil/ws_diag_control.h>
 #include <wsutil/ws_version_info.h>
 
 #include <wiretap/merge.h>
@@ -934,10 +928,10 @@ void resolve_name_cb(GtkWidget *widget _U_, gpointer data _U_)
         TRUE,   /* mac_name */
         TRUE,   /* network_name */
         TRUE,   /* transport_name */
-        TRUE,   /* concurrent_dns */
         TRUE,   /* dns_pkt_addr_resolution */
         TRUE,   /* use_external_net_name_resolver */
-        FALSE   /* load_hosts_file_from_profile_only */
+        FALSE,  /* load_hosts_file_from_profile_only */
+        FALSE   /* vlan_name */
     };
 
     if (cfile.edt->tree) {
@@ -1217,7 +1211,7 @@ print_usage(gboolean for_help_option) {
     fprintf(output, "Processing:\n");
     fprintf(output, "  -R <read filter>         packet filter in Wireshark display filter syntax\n");
     fprintf(output, "  -n                       disable all name resolutions (def: all enabled)\n");
-    fprintf(output, "  -N <name resolve flags>  enable specific name resolution(s): \"mnNtCd\"\n");
+    fprintf(output, "  -N <name resolve flags>  enable specific name resolution(s): \"mnNtd\"\n");
     fprintf(output, "  --disable-protocol <proto_name>\n");
     fprintf(output, "                           disable dissection of proto_name\n");
     fprintf(output, "  --enable-heuristic <short_name>\n");
@@ -1969,19 +1963,6 @@ get_wireshark_gtk_compiled_info(GString *str)
     /* Capture libraries */
     g_string_append(str, ", ");
     get_compiled_caplibs_version(str);
-
-    /* LIBZ */
-    g_string_append(str, ", ");
-#ifdef HAVE_LIBZ
-    g_string_append(str, "with libz ");
-#ifdef ZLIB_VERSION
-    g_string_append(str, ZLIB_VERSION);
-#else /* ZLIB_VERSION */
-    g_string_append(str, "(version unknown)");
-#endif /* ZLIB_VERSION */
-#else /* HAVE_LIBZ */
-    g_string_append(str, "without libz");
-#endif /* HAVE_LIBZ */
 }
 
 static void
@@ -2018,11 +1999,6 @@ get_wireshark_runtime_info(GString *str)
     get_runtime_caplibs_version(str);
 #endif
 
-    /* zlib */
-#if defined(HAVE_LIBZ) && !defined(_WIN32)
-    g_string_append_printf(str, ", with libz %s", zlibVersion());
-#endif
-
     /* stuff used by libwireshark */
     epan_get_runtime_version_info(str);
 
@@ -2030,11 +2006,6 @@ get_wireshark_runtime_info(GString *str)
     g_string_append(str, ", ");
     get_runtime_airpcap_version(str);
 #endif
-
-    if(u3_active()) {
-        g_string_append(str, ", ");
-        u3_runtime_info(str);
-    }
 }
 
 static e_prefs *
@@ -2533,7 +2504,7 @@ main(int argc, char *argv[])
     capture_session_init(&global_capture_session, &cfile);
 #endif
 
-    init_report_err(failure_alert_box, open_failure_alert_box,
+    init_report_err(vfailure_alert_box, open_failure_alert_box,
                     read_failure_alert_box, write_failure_alert_box);
 
     /* Non-blank filter means we're remote. Throttle splash screen and resolution updates. */
@@ -2739,7 +2710,7 @@ main(int argc, char *argv[])
             case 'N':        /* Select what types of addresses/port #s to resolve */
                 badopt = string_to_name_resolve(optarg, &gbl_resolv_flags);
                 if (badopt != '\0') {
-                    cmdarg_err("-N specifies unknown resolving option '%c'; valid options are 'C', 'd', m', 'n', 'N', and 't'",
+                    cmdarg_err("-N specifies unknown resolving option '%c'; valid options are 'd', m', 'n', 'N', and 't'",
                                badopt);
                     exit(1);
                 }
@@ -3348,10 +3319,6 @@ main(int argc, char *argv[])
         main_filter_packets(&cfile, dfilter, FALSE);
     }
 
-
-    /* register our pid if we are being run from a U3 device */
-    u3_register_pid();
-
     profile_store_persconffiles (FALSE);
 
 #ifdef HAVE_GTKOSXAPPLICATION
@@ -3379,9 +3346,6 @@ main(int argc, char *argv[])
 #ifdef HAVE_LIBPCAP
     gtk_iface_mon_stop();
 #endif
-
-    /* deregister our pid */
-    u3_deregister_pid();
 
     epan_cleanup();
 

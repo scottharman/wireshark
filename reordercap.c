@@ -32,10 +32,6 @@
 #include <getopt.h>
 #endif
 
-#ifdef HAVE_LIBZ
-#include <zlib.h>      /* to get the libz version number */
-#endif
-
 #include <wiretap/wtap.h>
 
 #ifndef HAVE_GETOPT_LONG
@@ -43,10 +39,17 @@
 #endif
 
 #include <wsutil/crash_info.h>
+#include <wsutil/filesystem.h>
 #include <wsutil/file_util.h>
-#include <wsutil/ws_diag_control.h>
+#include <wsutil/privileges.h>
 #include <wsutil/ws_version_info.h>
 #include <wiretap/wtap_opttypes.h>
+
+#ifdef HAVE_PLUGINS
+#include <wsutil/plugins.h>
+#endif
+
+#include <wsutil/report_err.h>
 
 /* Show command-line usage */
 static void
@@ -143,31 +146,18 @@ frames_compare(gconstpointer a, gconstpointer b)
     return nstime_cmp(time1, time2);
 }
 
+#ifdef HAVE_PLUGINS
+/*
+ *  Don't report failures to load plugins because most (non-wiretap) plugins
+ *  *should* fail to load (because we're not linked against libwireshark and
+ *  dissector plugins need libwireshark).
+ */
 static void
-get_reordercap_compiled_info(GString *str)
+failure_message(const char *msg_format _U_, va_list ap _U_)
 {
-    /* LIBZ */
-    g_string_append(str, ", ");
-#ifdef HAVE_LIBZ
-    g_string_append(str, "with libz ");
-#ifdef ZLIB_VERSION
-    g_string_append(str, ZLIB_VERSION);
-#else /* ZLIB_VERSION */
-    g_string_append(str, "(version unknown)");
-#endif /* ZLIB_VERSION */
-#else /* HAVE_LIBZ */
-    g_string_append(str, "without libz");
-#endif /* HAVE_LIBZ */
+    return;
 }
-
-static void
-get_reordercap_runtime_info(GString *str)
-{
-    /* zlib */
-#if defined(HAVE_LIBZ) && !defined(_WIN32)
-    g_string_append_printf(str, ", with libz %s", zlibVersion());
 #endif
-}
 
 /********************************************************************/
 /* Main function.                                                   */
@@ -205,11 +195,15 @@ main(int argc, char *argv[])
     char *infile;
     const char *outfile;
 
+#ifdef HAVE_PLUGINS
+    char  *init_progfile_dir_error;
+#endif
+
     /* Get the compile-time version information string */
-    comp_info_str = get_compiled_version_info(NULL, get_reordercap_compiled_info);
+    comp_info_str = get_compiled_version_info(NULL, NULL);
 
     /* Get the run-time version information string */
-    runtime_info_str = get_runtime_version_info(get_reordercap_runtime_info);
+    runtime_info_str = get_runtime_version_info(NULL);
 
     /* Add it to the information to be reported on a crash. */
     ws_add_crash_info("Reordercap (Wireshark) %s\n"
@@ -218,6 +212,32 @@ main(int argc, char *argv[])
          "\n"
          "%s",
       get_ws_vcs_version_info(), comp_info_str->str, runtime_info_str->str);
+
+  /*
+   * Get credential information for later use.
+   */
+  init_process_policies();
+  init_open_routines();
+
+#ifdef HAVE_PLUGINS
+    /* Register wiretap plugins */
+    if ((init_progfile_dir_error = init_progfile_dir(argv[0], main))) {
+        g_warning("reordercap: init_progfile_dir(): %s", init_progfile_dir_error);
+        g_free(init_progfile_dir_error);
+    } else {
+        /* Register all the plugin types we have. */
+        wtap_register_plugin_types(); /* Types known to libwiretap */
+
+        init_report_err(failure_message,NULL,NULL,NULL);
+
+        /* Scan for plugins.  This does *not* call their registration routines;
+           that's done later. */
+        scan_plugins();
+
+        /* Register all libwiretap plugin modules. */
+        register_all_wiretap_modules();
+    }
+#endif
 
     /* Process the options first */
     while ((opt = getopt_long(argc, argv, "hnv", long_options, NULL)) != -1) {

@@ -446,6 +446,8 @@ static struct _epl_segmentation{
 
 static epl_sdo_reassembly epl_asnd_sdo_reassembly_write;
 static epl_sdo_reassembly epl_asnd_sdo_reassembly_read;
+static gboolean first_read = TRUE;
+static gboolean first_write = TRUE;
 
 /* Priority values for EPL message type "ASnd", "", "", field PR */
 #define EPL_PR_GENERICREQUEST   0x03
@@ -1209,8 +1211,6 @@ static value_string_ext epl_sdo_asnd_commands_short_ext = VALUE_STRING_EXT_INIT(
 static const gchar* addr_str_cn  = " (Controlled Node)";
 static const gchar* addr_str_res = " (reserved)";
 
-static dissector_handle_t data_dissector = NULL;
-
 static gint dissect_epl_payload ( proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType );
 
 static gint dissect_epl_soc(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
@@ -1652,6 +1652,10 @@ static void
 cleanup_dissector(void)
 {
 	reassembly_table_destroy(&epl_reassembly_table);
+	count = 0;
+	ct = 0;
+	first_read = TRUE;
+	first_write = TRUE;
 }
 
 /* preference whether or not display the SoC flags in info column */
@@ -1928,7 +1932,7 @@ dissect_epl_payload ( proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, g
 		}
 
 		if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType))
-			call_dissector(data_dissector, payload_tvb, pinfo, epl_tree);
+			call_data_dissector(payload_tvb, pinfo, epl_tree);
 
 		off += len;
 	}
@@ -2822,13 +2826,14 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 	gboolean response, abort_flag;
 	guint32 abort_code = 0;
 	guint32 fragmentId = 0, remlength = 0;
-	guint16 segment_size;
+	guint16 segment_size = 0;
 	proto_tree *sdo_cmd_tree = NULL;
-	proto_tree *payload = NULL;
 	proto_item *item;
-	fragment_head *frag_msg = NULL;
+	guint8 sendCon = 0;
 
 	offset += 1;
+
+	sendCon = tvb_get_guint8(tvb, 5) & EPL_ASND_SDO_SEQ_SEND_CON_ERROR_VALID_ACK_REQ;
 
 	command_id = tvb_get_guint8(tvb, offset + 2);
 	abort_flag = tvb_get_guint8(tvb, offset + 1) & EPL_ASND_SDO_CMD_ABORT_FILTER;
@@ -2842,6 +2847,7 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 		transaction_id = tvb_get_guint8(tvb, offset);
 		response   = tvb_get_guint8(tvb, offset + 1) & EPL_ASND_SDO_CMD_RESPONSE_FILTER;
 		segmented  = (tvb_get_guint8(tvb, offset + 1) & EPL_ASND_SDO_CMD_SEGMENTATION_FILTER) >> 4;
+
 		segment_size = tvb_get_letohs(tvb, offset + 3);
 
 		col_append_fstr(pinfo->cinfo, COL_INFO, "Cmd:%s,TID=%02d ",
@@ -2854,14 +2860,16 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 		proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_abort,    tvb, offset, 1, ENC_LITTLE_ENDIAN);
 
 		proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_segmentation, tvb, offset, 1, ENC_LITTLE_ENDIAN);
-		offset += 1;
 
-		proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_command_id, tvb, offset, 1, ENC_LITTLE_ENDIAN);
-		offset += 1;
+		if (segment_size != 0)
+		{
+			offset += 1;
+			proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_command_id, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+			offset += 1;
 
-		proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_segment_size, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-		offset += 4;
-
+			proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_segment_size, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+			offset += 4;
+		}
 		/* adjust size of packet */
 		tvb_set_reported_length(tvb, offset + segment_size);
 
@@ -2869,12 +2877,15 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 		{
 			if((command_id == EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX) || (command_id == EPL_ASND_SDO_COMMAND_READ_BY_INDEX))
 			{
-				/* if download => reset counter */
-				if(command_id == EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX)
-					ct = 0x00;
-				/* if upload => reset counter */
-				else if(command_id == EPL_ASND_SDO_COMMAND_READ_BY_INDEX)
-					count = 0x00;
+				if (sendCon != EPL_ASND_SDO_SEQ_SEND_CON_ERROR_VALID_ACK_REQ)
+				{
+					/* if download => reset counter */
+					if(command_id == EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX)
+						ct = 0x00;
+					/* if upload => reset counter */
+					else if(command_id == EPL_ASND_SDO_COMMAND_READ_BY_INDEX)
+						count = 0x00;
+				}
 				/* payload length */
 				payload_length = tvb_reported_length_remaining(tvb, offset);
 				/* create a key for reassembly => first 16 bit are src-address and
@@ -2882,20 +2893,21 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 				fragmentId = (guint32)((((guint32)epl_segmentation.src)<<16)+epl_segmentation.dest);
 				/* set fragmented flag */
 				pinfo->fragmented = TRUE;
-				frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
+				fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
 												fragmentId, NULL, 0, payload_length, TRUE );
 				fragment_add_seq_offset ( &epl_reassembly_table, pinfo, fragmentId, NULL, 0 );
+				if (command_id == EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX)
+				{
+					first_write = FALSE;
+				}
+				else
+				{
+					first_read = FALSE;
+				}
 				/* if Segmentation = Initiate then print DataSize */
 				proto_tree_add_item(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_data_size, tvb, offset, 4, ENC_LITTLE_ENDIAN);
 				segmented = TRUE;
 
-				if(frag_msg != NULL)
-				{
-					item = proto_tree_add_uint_format(sdo_cmd_tree, hf_epl_asnd_sdo_cmd_reassembled, tvb, offset ,payload_length, 0,
-												"Reassembled: %d bytes total (%d bytes in this frame)",frag_msg->len,payload_length);
-					payload = proto_item_add_subtree(item, ett_epl_asnd_sdo_data_reassembled);
-					process_reassembled_data(tvb, 0, pinfo, "Reassembled Message", frag_msg, &epl_frag_items, NULL, payload );
-				}
 				offset += 4;
 			}
 			else
@@ -2967,7 +2979,7 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 gint
 dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
-	gint size, payload_length;
+	gint size, payload_length = 0;
 	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00;
 	guint8 subindex = 0x00;
 	guint32 fragmentId = 0;
@@ -3093,6 +3105,7 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 			fragmentId = (guint32)((((guint32)epl_segmentation.src)<<16)+epl_segmentation.dest);
 			/* set the fragmented flag */
 			pinfo->fragmented = TRUE;
+
 			/* get payloade size */
 			payload_length = tvb_reported_length_remaining(tvb, offset);
 			/* if the frame is the last frame */
@@ -3111,14 +3124,34 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 				frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
 							  fragmentId, NULL, ct, payload_length, end_segment ? FALSE : TRUE );
 			}
-			else if(epl_asnd_sdo_reassembly_write.frame[epl_segmentation.recv][epl_segmentation.send] == 0x00)
+			else
 			{
-				/* save the current frame and increase counter */
-				epl_asnd_sdo_reassembly_write.frame[epl_segmentation.recv][epl_segmentation.send] = frame;
-				ct += 1;
-				/* add the frame to reassembly_table */
-				frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
-								  fragmentId, NULL, ct, payload_length, end_segment ? FALSE : TRUE );
+				if(epl_asnd_sdo_reassembly_write.frame[epl_segmentation.recv][epl_segmentation.send] == 0x00)
+				{
+					/* save the current frame and increase counter */
+					epl_asnd_sdo_reassembly_write.frame[epl_segmentation.recv][epl_segmentation.send] = frame;
+					ct += 1;
+					/* add the frame to reassembly_table */
+					if (first_write)
+					{
+						frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
+							fragmentId, NULL, 0, payload_length, end_segment ? FALSE : TRUE );
+						fragment_add_seq_offset(&epl_reassembly_table, pinfo, fragmentId, NULL, ct);
+
+						first_write = FALSE;
+					}
+					else
+					{
+						frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
+							fragmentId, NULL, ct, payload_length, end_segment ? FALSE : TRUE );
+					}
+				}
+				else
+				{
+					frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
+						fragmentId, NULL, 0, payload_length, end_segment ? FALSE : TRUE);
+					epl_asnd_sdo_reassembly_write.frame[epl_segmentation.recv][epl_segmentation.send] = frame;
+				}
 			}
 
 			/* if the reassembly_table is not Null and the frame stored is the same as the current frame */
@@ -3135,8 +3168,6 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 					proto_tree_add_uint_format_value(payload_tree, hf_epl_asnd_sdo_cmd_reassembled, tvb, 0, 0,
 									payload_length, "%d bytes (over all fragments)", frag_msg->len);
 					col_append_str(pinfo->cinfo, COL_INFO, " (Message Reassembled)" );
-					/* reset memory */
-					memset(&epl_asnd_sdo_reassembly_write,0,sizeof(epl_sdo_reassembly));
 				}
 				else
 				{
@@ -3146,9 +3177,10 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 					/* add reassemble field => Reassembled in: */
 					process_reassembled_data(tvb, 0, pinfo, "Reassembled Message", frag_msg, &epl_frag_items, NULL, payload_tree );
 				}
+				first_write = TRUE;
+				ct = 0;
 			}
 		}
-
 		size = tvb_reported_length_remaining(tvb, offset);
 
 		/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
@@ -3453,12 +3485,11 @@ dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packe
 						 segment_size, idx, subindex);
 		col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", val_to_str_ext_const(((guint32) (idx << 16)), &sod_index_names, "User Defined"));
 		col_append_fstr(pinfo->cinfo, COL_INFO, "/%s)",val_to_str_ext_const((subindex|(idx<<16)), &sod_index_names, "User Defined"));
-
 	}
 	else
 	{
-		/* upload */
-		if(segmented > 0x01)
+		/* upload and no response */
+		if(segmented > 0x01 && segment_size != 0)
 		{
 			/* get the fragmentId */
 			fragmentId = (guint32)((((guint32)epl_segmentation.src)<<16)+epl_segmentation.dest);
@@ -3470,28 +3501,34 @@ dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packe
 			if(segmented == EPL_ASND_SDO_CMD_SEGMENTATION_TRANSFER_COMPLETE)
 				end_segment = TRUE;
 
-			/* if the send-sequence-number is at the end or the beginning of a sequence */
-			if(epl_segmentation.send == 0x3f || epl_segmentation.send <= 0x01 )
+			if(epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] == 0x00 ||
+				epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] == frame)
 			{
-				/* reset memory */
-				memset(&epl_asnd_sdo_reassembly_read,0,sizeof(epl_sdo_reassembly));
-				epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] = frame;
-				count += 1;
-			}
-			else if(epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] == 0x00)
-			{
+				if (epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] == 0x00)
+					count += 1;
 				/* store the current frame and increase the counter */
 				epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] = frame;
-				count += 1;
-			}
-			/* add the frame to reassembly_table */
-			frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
+
+				/* add the frame to reassembly_table */
+				if (first_read)
+				{
+					frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
+							fragmentId, NULL, 0, payload_length, end_segment ? FALSE : TRUE );
+					fragment_add_seq_offset(&epl_reassembly_table, pinfo, fragmentId, NULL, count);
+
+					first_read = FALSE;
+				}
+				else
+				{
+					frag_msg = fragment_add_seq_check(&epl_reassembly_table, tvb, offset, pinfo,
 							fragmentId, NULL, count, payload_length, end_segment ? FALSE : TRUE );
+				}
+			}
 
 			/* if the reassembly_table is not Null and the frame stored is the same as the current frame */
 			if(frag_msg != NULL && (epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv][epl_segmentation.send] == frame))
 			{
-				if(end_segment)
+				if(end_segment || payload_length > 0)
 				{
 					cmd_payload = proto_tree_add_uint_format(epl_tree, hf_epl_asnd_sdo_cmd_reassembled, tvb, offset, payload_length,0,
 															"Reassembled: %d bytes total (%d bytes in this frame)",frag_msg->len,payload_length);
@@ -3500,9 +3537,10 @@ dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packe
 					process_reassembled_data(tvb, 0, pinfo, "Reassembled Message", frag_msg, &epl_frag_items, NULL, payload_tree );
 					proto_tree_add_uint_format_value(payload_tree, hf_epl_asnd_sdo_cmd_reassembled, tvb, 0, 0,
 									payload_length, "%d bytes (over all fragments)", frag_msg->len);
-					col_append_str(pinfo->cinfo, COL_INFO, " (Message Reassembled)" );
+					if (frag_msg->reassembled_in == frame)
+						col_append_str(pinfo->cinfo, COL_INFO, " (Message Reassembled)" );
 					/* reset memory */
-					memset(&epl_asnd_sdo_reassembly_read,0,sizeof(epl_sdo_reassembly));
+					memset(&epl_asnd_sdo_reassembly_read.frame[epl_segmentation.recv], 0, sizeof(guint32) * EPL_MAX_SEQUENCE);
 				}
 				else
 				{
@@ -3512,6 +3550,9 @@ dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packe
 					/* add reassemble field => Reassembled in: */
 					process_reassembled_data(tvb, 0, pinfo, "Reassembled Message", frag_msg, &epl_frag_items, NULL, payload_tree );
 				}
+
+				first_read = TRUE;
+				count = 0;
 			}
 		}
 		/* response */
@@ -4350,10 +4391,10 @@ proto_register_epl(void)
 	proto_epl = proto_register_protocol("Ethernet POWERLINK", "EPL", "epl");
 
 	/* subdissector code */
-	heur_epl_subdissector_list = register_heur_dissector_list("epl");
-	heur_epl_data_subdissector_list = register_heur_dissector_list("epl_data");
+	heur_epl_subdissector_list = register_heur_dissector_list("epl", proto_epl);
+	heur_epl_data_subdissector_list = register_heur_dissector_list("epl_data", proto_epl);
 	epl_asnd_dissector_table = register_dissector_table("epl.asnd",
-		"Manufacturer specific ASND service", FT_UINT8, BASE_DEC, DISSECTOR_TABLE_NOT_ALLOW_DUPLICATE);
+		"Manufacturer specific ASND service", proto_epl, FT_UINT8, BASE_DEC, DISSECTOR_TABLE_NOT_ALLOW_DUPLICATE);
 
 	/* Registering protocol to be called by another dissector */
 	epl_handle = register_dissector("epl", dissect_epl, proto_epl);
@@ -4385,10 +4426,6 @@ void
 proto_reg_handoff_epl(void)
 {
 	dissector_handle_t epl_udp_handle = create_dissector_handle( dissect_epludp, proto_epl );
-
-	/* Store a pointer to the data_dissector */
-	if ( data_dissector == NULL )
-		data_dissector = find_dissector ( "data" );
 
 	dissector_add_uint("ethertype", ETHERTYPE_EPL_V2, epl_handle);
 	dissector_add_uint("udp.port", UDP_PORT_EPL, epl_udp_handle);

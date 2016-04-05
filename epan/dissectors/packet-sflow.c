@@ -570,6 +570,7 @@ static int hf_sflow_5_extended_80211_rx_version = -1;
 static int hf_sflow_flow_sample_dropped_packets = -1;
 static int hf_sflow_counters_sample_expanded_source_id_index = -1;
 static int hf_sflow_245_header_payload_removed = -1;
+static int hf_sflow_245_original_packet_header_length = -1;
 static int hf_sflow_245_ethernet_destination_mac_address = -1;
 static int hf_sflow_counters_sample_source_id_class = -1;
 static int hf_sflow_5_extended_url_url_length = -1;
@@ -632,7 +633,6 @@ static gint ett_sflow_lag_port_state_flags = -1;
 static expert_field ei_sflow_invalid_address_type = EI_INIT;
 
 static dissector_table_t   header_subdissector_table;
-static dissector_handle_t data_handle;
 
 void proto_reg_handoff_sflow_245(void);
 
@@ -641,7 +641,7 @@ static gint
 dissect_sflow_245_sampled_header(tvbuff_t *tvb, packet_info *pinfo,
                                  proto_tree *tree, volatile gint offset) {
     guint32           version, header_proto, frame_length;
-    volatile guint32  header_length;
+    guint32  header_length;
     tvbuff_t         *next_tvb;
     proto_tree       *sflow_245_header_tree;
     proto_item       *ti;
@@ -664,7 +664,7 @@ dissect_sflow_245_sampled_header(tvbuff_t *tvb, packet_info *pinfo,
         offset += 4;
     }
 
-    header_length = tvb_get_ntohl(tvb, offset);
+    proto_tree_add_item_ret_uint(tree, hf_sflow_245_original_packet_header_length, tvb, offset, 4, ENC_BIG_ENDIAN, &header_length);
     offset += 4;
 
     if (header_length % 4) /* XDR requires 4-byte alignment */
@@ -718,7 +718,7 @@ dissect_sflow_245_sampled_header(tvbuff_t *tvb, packet_info *pinfo,
         if ((global_dissect_samp_headers == FALSE) ||
             !dissector_try_uint(header_subdissector_table, header_proto, next_tvb, pinfo, sflow_245_header_tree))
         {
-            call_dissector(data_handle, next_tvb, pinfo, sflow_245_header_tree);
+            call_data_dissector(next_tvb, pinfo, sflow_245_header_tree);
         }
     }
 
@@ -3011,6 +3011,11 @@ proto_register_sflow(void) {
           FT_UINT32, BASE_DEC, NULL, 0x0,
           NULL, HFILL }
       },
+      { &hf_sflow_245_original_packet_header_length,
+        { "Original packet length", "sflow_245.header.original_packet_header_length",
+          FT_UINT32, BASE_DEC, NULL, 0x0,
+          NULL, HFILL }
+      },
       { &hf_sflow_245_extended_mpls_in_label_stack_entries,
         { "In Label Stack Entries", "sflow_245.extended_mpls.in_label_stack_entries",
           FT_UINT32, BASE_DEC, NULL, 0x0,
@@ -3630,7 +3635,7 @@ proto_register_sflow(void) {
     expert_sflow = expert_register_protocol(proto_sflow);
     expert_register_field_array(expert_sflow, ei, array_length(ei));
 
-    header_subdissector_table  = register_dissector_table("sflow_245.header_protocol", "SFLOW header protocol", FT_UINT32, BASE_DEC, DISSECTOR_TABLE_NOT_ALLOW_DUPLICATE);
+    header_subdissector_table  = register_dissector_table("sflow_245.header_protocol", "SFLOW header protocol", proto_sflow, FT_UINT32, BASE_DEC, DISSECTOR_TABLE_NOT_ALLOW_DUPLICATE);
 
     /* Register our configuration options for sFlow */
     sflow_245_module = prefs_register_protocol(proto_sflow, proto_reg_handoff_sflow_245);
@@ -3681,7 +3686,6 @@ proto_reg_handoff_sflow_245(void) {
 
     if (!sflow_245_prefs_initialized) {
         sflow_handle = create_dissector_handle(dissect_sflow_245, proto_sflow);
-        data_handle = find_dissector("data");
         sflow_245_prefs_initialized = TRUE;
     } else {
         dissector_delete_uint_range("udp.port", sflow_ports, sflow_handle);

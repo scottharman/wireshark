@@ -54,6 +54,7 @@ set(WSUTIL_FILES
 	frequency-utils.c
 	g711.c
 	inet_addr.c
+	interface.c
 	jsmn.c
 	md4.c
 	md5.c
@@ -72,7 +73,6 @@ set(WSUTIL_FILES
 	tempfile.c
 	time_util.c
 	type_util.c
-	u3.c
 	unicode-utils.c
 	ws_mempbrk.c
 	ws_version_info.c
@@ -146,7 +146,7 @@ if(HAVE_SSE4_2)
 endif()
 
 if(NOT HAVE_GETOPT_LONG)
-	set(WSUTIL_FILES ${WSUTIL_FILES} wsgetopt.c)
+	set(WSUTIL_FILES ${WSUTIL_FILES} getopt_long.c)
 endif()
 
 if(NOT HAVE_INET_ATON)
@@ -175,6 +175,7 @@ set(wsutil_LIBS
 	${GMODULE2_LIBRARIES}
 	${GLIB2_LIBRARIES}
 	${GCRYPT_LIBRARIES}
+	${ZLIB_LIBRARIES}
 	${WIN_WSOCK32_LIBRARY}
 )
 IF(WIN32)

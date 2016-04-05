@@ -22,6 +22,21 @@
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
 
+if HAVE_GRESOURCE_PIXBUF
+NODIST_GENERATED_FILES += \
+	wireshark-gresources.h	\
+	wireshark-gresources.c
+else
+BUILD_PIXBUF_CSOURCE = \
+	pixbuf-csource.h
+	pixbuf-csource.c
+endif
+
+if HAVE_EXTCAP
+WIRESHARK_COMMON_GTK_SRC += extcap_gtk.c
+WIRESHARK_COMMON_GTK_HDRS += extcap_gtk.h
+endif
+
 AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GTK_CFLAGS) \
 	$(PORTAUDIO_INCLUDES)
 
@@ -31,16 +46,15 @@ CLEANFILES = \
 	wireshark-tap-register-cache.pkl	\
 	*~
 
+DISTCLEANFILES = \
+	$(NODIST_GENERATED_FILES)
+
 MAINTAINERCLEANFILES = \
 	$(GENERATED_FILES)	\
 	Makefile.in
 
-WIRESHARK_CLEAN_LIBGTKUI_SRC = \
-	$(WIRESHARK_COMMON_GTK_SRC)	\
-	$(WIRESHARK_TAP_SRC)		\
-	$(GENERATED_C_FILES)
-
 EXTRA_DIST = \
+	.editorconfig			\
 	$(GENERATOR_FILES)		\
 	airpcap_dlg.c			\
 	airpcap_dlg.h			\
@@ -58,22 +72,21 @@ EXTRA_DIST = \
 	pixbuf-csource.c		\
 	pixbuf-csource.h
 
-BUILT_SOURCES =
-
-if HAVE_GRESOURCE_PIXBUF
-BUILT_SOURCES += wireshark-gresources.h
-GENERATED_HEADER_FILES += wireshark-gresources.h
-GENERATED_C_FILES += wireshark-gresources.c
-else
-WIRESHARK_CLEAN_LIBGTKUI_SRC += pixbuf-csource.c
-endif
+BUILT_SOURCES = \
+	$(GENERATED_FILES)	\
+	$(NODIST_GENERATED_FILES)
 
 noinst_LIBRARIES = libgtkui.a
 
 libgtkui_a_SOURCES = \
-	$(WIRESHARK_CLEAN_LIBGTKUI_SRC)	\
-	$(noinst_HEADERS)		\
-	$(GENERATED_HEADER_FILES)
+	$(WIRESHARK_COMMON_GTK_SRC)	\
+	$(WIRESHARK_COMMON_GTK_HDRS)	\
+	$(WIRESHARK_TAP_SRC)		\
+	$(GENERATED_FILES)
+
+nodist_libgtkui_a_SOURCES = \
+	$(NODIST_GENERATED_FILES)	\
+	$(BUILD_PIXBUF_CSOURCE)
 
 libgtkui_a_DEPENDENCIES =
 
@@ -95,7 +108,6 @@ wireshark-tap-register.c:  $(WIRESHARK_TAP_SRC) Makefile.common Makefile_custom.
 	@echo Making wireshark-tap-register.c
 	@$(PYTHON) $(top_srcdir)/tools/make-tap-reg.py $(srcdir) taps $(WIRESHARK_TAP_SRC)
 
-if HAVE_GRESOURCE_PIXBUF
 wireshark-gresources.c: main.gresources.xml $(shell glib-compile-resources --sourcedir=$(top_srcdir) --generate-dependencies $(srcdir)/main.gresources.xml)
 	@echo Making $@
 	@glib-compile-resources --sourcedir=$(top_srcdir) --target=$@ --generate --manual-register $<
@@ -103,7 +115,6 @@ wireshark-gresources.c: main.gresources.xml $(shell glib-compile-resources --sou
 wireshark-gresources.h: main.gresources.xml
 	@echo Making $@
 	@glib-compile-resources --sourcedir=$(top_srcdir) --target=$@ --generate --manual-register $<
-endif
 
 doxygen:
 if HAVE_DOXYGEN

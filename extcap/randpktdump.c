@@ -29,9 +29,9 @@
 #include "randpkt_core/randpkt_core.h"
 
 #define RANDPKT_EXTCAP_INTERFACE "randpkt"
-#define RANDPKTDUMP_VERSION_MAJOR 0
-#define RANDPKTDUMP_VERSION_MINOR 1
-#define RANDPKTDUMP_VERSION_RELEASE 0
+#define RANDPKTDUMP_VERSION_MAJOR "0"
+#define RANDPKTDUMP_VERSION_MINOR "1"
+#define RANDPKTDUMP_VERSION_RELEASE "0"
 
 #define verbose_print(...) { if (verbose) printf(__VA_ARGS__); }
 
@@ -65,10 +65,9 @@ static struct option longopts[] = {
 
 static void help(const char* binname)
 {
-	unsigned i;
-	const char** abbrev_list;
-	const char** longname_list;
-	unsigned list_num;
+	unsigned i = 0;
+	char** abbrev_list;
+	char** longname_list;
 
 	printf("Help\n");
 	printf(" Usage:\n");
@@ -94,29 +93,23 @@ static void help(const char* binname)
 	printf("  --all-random: a random type is chosen for each packet\n");
 	printf("  --type <type>: the packet type\n");
 	printf("\n\nPacket types:\n");
-	randpkt_example_list(&abbrev_list, &longname_list, &list_num);
-	for (i = 0; i < list_num; i++) {
+	randpkt_example_list(&abbrev_list, &longname_list);
+	while (abbrev_list[i] && longname_list[i]) {
 		printf("\t%-16s%s\n", abbrev_list[i], longname_list[i]);
+		i++;
 	}
-	g_free((char**)abbrev_list);
-	g_free((char**)longname_list);
+	printf("\n");
+	g_strfreev(abbrev_list);
+	g_strfreev(longname_list);
 
-}
-
-static int list_interfaces(void)
-{
-	printf("extcap {version=%u.%u.%u}\n", RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR, RANDPKTDUMP_VERSION_RELEASE);
-	printf("interface {value=%s}{display=Random packet generator}\n", RANDPKT_EXTCAP_INTERFACE);
-	return EXIT_SUCCESS;
 }
 
 static int list_config(char *interface)
 {
 	unsigned inc = 0;
-	unsigned i;
-	const char** abbrev_list;
-	const char** longname_list;
-	unsigned list_num;
+	unsigned i = 0;
+	char** abbrev_list;
+	char** longname_list;
 
 	if (!interface) {
 		errmsg_print("ERROR: No interface specified.");
@@ -145,30 +138,14 @@ static int list_config(char *interface)
 	printf("arg {number=%u}{call=--type}{display=Type of packet}"
 		"{type=selector}{tooltip=Type of packet to generate}\n",
 		inc);
-	randpkt_example_list(&abbrev_list, &longname_list, &list_num);
-	for (i = 0; i < list_num; i++) {
+	randpkt_example_list(&abbrev_list, &longname_list);
+	while (abbrev_list[i] && longname_list[i]) {
 		printf("value {arg=%u}{value=%s}{display=%s}\n", inc, abbrev_list[i], longname_list[i]);
+		i++;
 	}
-	g_free((char**)abbrev_list);
-	g_free((char**)longname_list);
+	g_strfreev(abbrev_list);
+	g_strfreev(longname_list);
 	inc++;
-
-	return EXIT_SUCCESS;
-}
-
-static int list_dlts(const char *interface)
-{
-	if (!interface) {
-		errmsg_print("ERROR: No interface specified.");
-		return EXIT_FAILURE;
-	}
-
-	if (g_strcmp0(interface, RANDPKT_EXTCAP_INTERFACE)) {
-		errmsg_print("ERROR: interface must be %s", RANDPKT_EXTCAP_INTERFACE);
-		return EXIT_FAILURE;
-	}
-
-	printf("dlt {number=147}{name=%s}{display=Generator dependent DLT}\n", RANDPKT_EXTCAP_INTERFACE);
 
 	return EXIT_SUCCESS;
 }
@@ -176,13 +153,7 @@ static int list_dlts(const char *interface)
 int main(int argc, char *argv[])
 {
 	int option_idx = 0;
-	int do_capture = 0;
-	int do_dlts = 0;
-	int do_config = 0;
-	int do_list_interfaces = 0;
 	int result;
-	char* fifo = NULL;
-	char* interface = NULL;
 	int maxbytes = 5000;
 	guint64 count = 1000;
 	int random_type = FALSE;
@@ -192,14 +163,20 @@ int main(int argc, char *argv[])
 	randpkt_example	*example;
 	wtap_dumper* savedump;
 	int i;
+	int ret = EXIT_FAILURE;
 
 #ifdef _WIN32
 	WSADATA wsaData;
 #endif  /* _WIN32 */
 
+	extcap_parameters * extcap_conf = g_new0(extcap_parameters, 1);
+
+	extcap_base_set_util_info(extcap_conf, RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR, RANDPKTDUMP_VERSION_RELEASE, NULL);
+	extcap_base_register_interface(extcap_conf, RANDPKT_EXTCAP_INTERFACE, "Random packet generator", 147, "Generator dependent DLT");
+
 	if (argc == 1) {
 		help(argv[0]);
-		return EXIT_FAILURE;
+		goto end;
 	}
 
 #ifdef _WIN32
@@ -214,53 +191,24 @@ int main(int argc, char *argv[])
 	while ((result = getopt_long(argc, argv, ":", longopts, &option_idx)) != -1) {
 		switch (result) {
 		case OPT_VERSION:
-			printf("%u.%u.%u\n", RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR, RANDPKTDUMP_VERSION_RELEASE);
-			return 0;
+			printf("%s.%s.%s\n", RANDPKTDUMP_VERSION_MAJOR, RANDPKTDUMP_VERSION_MINOR, RANDPKTDUMP_VERSION_RELEASE);
+			ret = EXIT_SUCCESS;
+			goto end;
 
 		case OPT_VERBOSE:
-			break;
-
-		case OPT_LIST_INTERFACES:
-			do_list_interfaces = 1;
-			break;
-
-		case OPT_LIST_DLTS:
-			do_dlts = 1;
-			break;
-
-		case OPT_INTERFACE:
-			if (interface)
-				g_free(interface);
-			interface = g_strdup(optarg);
-			break;
-
-		case OPT_CONFIG:
-			do_config = 1;
-			break;
-
-		case OPT_CAPTURE:
-			do_capture = 1;
-			break;
-
-		case OPT_CAPTURE_FILTER:
-			/* currently unused */
-			break;
-
-		case OPT_FIFO:
-			if (fifo)
-				g_free(fifo);
-			fifo = g_strdup(optarg);
+			verbose = TRUE;
 			break;
 
 		case OPT_HELP:
 			help(argv[0]);
-			return 0;
+			ret = EXIT_SUCCESS;
+			goto end;
 
 		case OPT_MAXBYTES:
 			maxbytes = atoi(optarg);
 			if (maxbytes > MAXBYTES_LIMIT) {
 				errmsg_print("randpktdump: Max bytes is %u", MAXBYTES_LIMIT);
-				return 1;
+				goto end;
 			}
 			break;
 
@@ -281,6 +229,7 @@ int main(int argc, char *argv[])
 			break;
 
 		case OPT_TYPE:
+			g_free(type);
 			type = g_strdup(optarg);
 			break;
 
@@ -290,29 +239,34 @@ int main(int argc, char *argv[])
 			break;
 
 		default:
-			errmsg_print("Invalid option 1: %s", argv[optind - 1]);
-			return EXIT_FAILURE;
+			/* Handle extcap specific options */
+			if (!extcap_base_parse_options(extcap_conf, result - EXTCAP_OPT_LIST_INTERFACES, optarg))
+			{
+				errmsg_print("Invalid option: %s", argv[optind - 1]);
+				goto end;
+			}
 		}
 	}
 
 	if (optind != argc) {
 		errmsg_print("Invalid option: %s", argv[optind]);
-		return EXIT_FAILURE;
+		goto end;
 	}
 
-	if (do_list_interfaces)
-		return list_interfaces();
+	if (extcap_base_handle_interface(extcap_conf)) {
+		ret = EXIT_SUCCESS;
+		goto end;
+	}
 
-	if (do_config)
-		return list_config(interface);
-
-	if (do_dlts)
-		return list_dlts(interface);
+	if (extcap_conf->show_config) {
+		ret = list_config(extcap_conf->interface);
+		goto end;
+	}
 
 	/* Some sanity checks */
 	if ((random_type) && (all_random)) {
 		errmsg_print("You can specify only one between: --random-type, --all-random");
-		return EXIT_FAILURE;
+		goto end;
 	}
 
 	/* Wireshark sets the type, even when random options are selected. We don't want it */
@@ -326,42 +280,37 @@ int main(int argc, char *argv[])
 	if (result != 0) {
 		if (verbose)
 			errmsg_print("ERROR: WSAStartup failed with error: %d", result);
-		return 1;
+		goto end;
 	}
 #endif  /* _WIN32 */
 
-	if (do_capture) {
-		if (!fifo) {
-			errmsg_print("ERROR: No FIFO or file specified");
-			return 1;
-		}
+	if (extcap_conf->capture) {
 
-		if (g_strcmp0(interface, RANDPKT_EXTCAP_INTERFACE)) {
+		if (g_strcmp0(extcap_conf->interface, RANDPKT_EXTCAP_INTERFACE)) {
 			errmsg_print("ERROR: invalid interface");
-			return 1;
+			goto end;
 		}
 
 		randpkt_seed();
 
 		if (!all_random) {
 			produce_type = randpkt_parse_type(type);
-			g_free(type);
 
 			example = randpkt_find_example(produce_type);
 			if (!example)
-				return 1;
+				goto end;
 
 			verbose_print("Generating packets: %s\n", example->abbrev);
 
-			randpkt_example_init(example, fifo, maxbytes);
+			randpkt_example_init(example, extcap_conf->fifo, maxbytes);
 			randpkt_loop(example, count);
 			randpkt_example_close(example);
 		} else {
 			produce_type = randpkt_parse_type(NULL);
 			example = randpkt_find_example(produce_type);
 			if (!example)
-				return 1;
-			randpkt_example_init(example, fifo, maxbytes);
+				goto end;
+			randpkt_example_init(example, extcap_conf->fifo, maxbytes);
 
 			while (count-- > 0) {
 				randpkt_loop(example, 1);
@@ -371,24 +320,20 @@ int main(int argc, char *argv[])
 
 				example = randpkt_find_example(produce_type);
 				if (!example)
-					return 1;
+					goto end;
 				example->dump = savedump;
 			}
 			randpkt_example_close(example);
 		}
+		ret = EXIT_SUCCESS;
 	}
 
+end:
 	/* clean up stuff */
-	if (interface)
-		g_free(interface);
+	g_free(type);
+	extcap_base_cleanup(&extcap_conf);
 
-	if (fifo)
-		g_free(fifo);
-
-	if (type)
-		g_free(type);
-
-	return 0;
+	return ret;
 }
 
 #ifdef _WIN32
@@ -399,7 +344,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 #endif
 
 /*
- * Editor modelines  -  http://www.wireshark.org/tools/modelines.html
+ * Editor modelines  -  https://www.wireshark.org/tools/modelines.html
  *
  * Local variables:
  * c-basic-offset: 8
@@ -407,6 +352,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
  * indent-tabs-mode: t
  * End:
  *
- * vi: set shiftwidth=8 tabstop=8 expandtab:
+ * vi: set shiftwidth=8 tabstop=8 noexpandtab:
  * :indentSize=8:tabSize=8:noTabs=false:
  */

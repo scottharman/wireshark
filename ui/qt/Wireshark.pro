@@ -302,6 +302,7 @@ HEADERS += $$HEADERS_WS_C \
     column_preferences_frame.h \
     column_editor_frame.h \
     compiled_filter_output.h \
+    conversation_colorize_action.h \
     conversation_dialog.h \
     conversation_hash_tables_dialog.h \
     decode_as_dialog.h \
@@ -635,6 +636,7 @@ HEADERS += \
     display_filter_edit.h \
     file_set_dialog.h \
     filter_dialog.h \
+    geometry_state_dialog.h \
     iax2_analysis_dialog.h \
     import_text_dialog.h \
     interface_tree.h \
@@ -691,6 +693,7 @@ SOURCES += \
     column_preferences_frame.cpp \
     column_editor_frame.cpp \
     compiled_filter_output.cpp \
+    conversation_colorize_action.cpp \
     conversation_dialog.cpp \
     conversation_hash_tables_dialog.cpp \
     decode_as_dialog.cpp \
@@ -721,6 +724,7 @@ SOURCES += \
     funnel_string_dialog.cpp \
     funnel_text_dialog.cpp \
     funnel_statistics.cpp \
+    geometry_state_dialog.cpp \
     gsm_map_summary_dialog.cpp \
     iax2_analysis_dialog.cpp \
     import_text_dialog.cpp \

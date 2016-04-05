@@ -1292,7 +1292,7 @@ dissect_u3v_read_mem_cmd(proto_tree *u3v_telegram_tree, tvbuff_t *tvb, packet_in
         item = proto_tree_add_uint64(u3v_telegram_tree, hf_u3v_address, tvb, offset, 8, addr);
         proto_item_append_text(item, " %s", address_string);
     } else {
-        item = proto_tree_add_item(u3v_telegram_tree, hf_u3v_custom_memory_addr, tvb, offset, 8, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(u3v_telegram_tree, hf_u3v_custom_memory_addr, tvb, offset, 8, ENC_LITTLE_ENDIAN);
     }
     offset += 8;
 
@@ -1423,7 +1423,7 @@ dissect_u3v_read_mem_ack(proto_tree *u3v_telegram_tree, tvbuff_t *tvb, packet_in
         if (is_known_bootstrap_register(addr, u3v_conv_info)) {
             dissect_u3v_register(addr, u3v_telegram_tree, tvb, offset, byte_count, u3v_conv_info);
         } else {
-            item = proto_tree_add_item(u3v_telegram_tree, hf_u3v_custom_memory_data, tvb, startoffset, length, ENC_NA);
+            proto_tree_add_item(u3v_telegram_tree, hf_u3v_custom_memory_data, tvb, startoffset, length, ENC_NA);
         }
     }
 }
@@ -1685,11 +1685,6 @@ dissect_u3v(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
         usb_conv_info->class_data = u3v_conv_info;
     }
 
-    /* it should be possible to also match on
-     * usb_conv_info->interfaceSubclass and usb_conv_info->interfaceProtocol
-     * but it seems that this information is not correctly setup during
-     * descriptor parsing
-     */
     prefix = tvb_get_letohl(tvb, 0);
     if ((tvb_reported_length(tvb) >= 4) && ( ( U3V_CONTROL_PREFIX == prefix ) || ( U3V_EVENT_PREFIX == prefix ) ) ) {
         control_detected = TRUE;
@@ -1698,6 +1693,15 @@ dissect_u3v(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
     if (((tvb_reported_length(tvb) >= 4) && (( U3V_STREAM_LEADER_PREFIX == prefix ) || ( U3V_STREAM_TRAILER_PREFIX == prefix )))
          || (usb_conv_info->endpoint == u3v_conv_info->ep_stream)) {
         stream_detected = TRUE;
+    }
+
+    /* initialize interface class/subclass in case no descriptors have been dissected yet */
+    if ( control_detected || stream_detected){
+        if ( usb_conv_info->interfaceClass  == IF_CLASS_UNKNOWN &&
+             usb_conv_info->interfaceSubclass  == IF_SUBCLASS_UNKNOWN){
+            usb_conv_info->interfaceClass = IF_CLASS_MISCELLANEOUS;
+            usb_conv_info->interfaceSubclass = IF_SUBCLASS_MISC_U3V;
+        }
     }
 
     if ( control_detected ) {
@@ -1882,27 +1886,28 @@ static gboolean
 dissect_u3v_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
 {
     guint32 prefix;
-    usb_conv_info_t *usb_conv_info =NULL;
-    u3v_conv_info_t *u3v_conv_info =NULL;
+    usb_conv_info_t *usb_conv_info;
+
+    /* all control and meta data packets of U3V contain at least the prefix */
+    if (tvb_reported_length(tvb) < 4)
+        return FALSE;
+    prefix = tvb_get_letohl(tvb, 0);
 
     /* check if stream endpoint has been already set up for this conversation */
     usb_conv_info = (usb_conv_info_t *)data;
-    u3v_conv_info = (u3v_conv_info_t *)usb_conv_info->class_data;
-
-
-    /* all control and meta data packets of U3V contain at least the prefix */
-    if (tvb_reported_length(tvb) < 4) {
+    if (!usb_conv_info)
         return FALSE;
-    }
 
-    /* either right prefix or the endpoint of the current transfer has been recognized as stream endpoint already */
-    prefix = tvb_get_letohl(tvb, 0);
+    /* either right prefix or the endpoint of the interface descriptor
+       set the correct class and subclass */
     if ((U3V_STREAM_LEADER_PREFIX  == prefix) || (U3V_STREAM_TRAILER_PREFIX == prefix) ||
         (U3V_CONTROL_PREFIX        == prefix) || (U3V_EVENT_PREFIX          == prefix) ||
-        ( u3v_conv_info && (usb_conv_info->endpoint == u3v_conv_info->ep_stream))) {
+        ((usb_conv_info->interfaceClass == IF_CLASS_MISCELLANEOUS &&
+          usb_conv_info->interfaceSubclass == IF_SUBCLASS_MISC_U3V))) {
         dissect_u3v(tvb, pinfo, tree, data);
         return TRUE;
     }
+
     return FALSE;
 }
 

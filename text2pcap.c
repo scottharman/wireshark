@@ -112,7 +112,6 @@
 #include <string.h>
 #include <wsutil/file_util.h>
 #include <wsutil/crash_info.h>
-#include <wsutil/ws_diag_control.h>
 #include <wsutil/ws_version_info.h>
 #include <wsutil/inet_addr.h>
 
@@ -126,10 +125,6 @@
 #include <errno.h>
 #include <assert.h>
 
-#ifdef HAVE_LIBZ
-#include <zlib.h>      /* to get the libz version number */
-#endif
-
 #ifndef HAVE_GETOPT_LONG
 #include "wsutil/wsgetopt.h"
 #endif
@@ -138,7 +133,7 @@
 # include "wsutil/strptime.h"
 #endif
 
-#include "pcapio.h"
+#include "writecap/pcapio.h"
 #include "text2pcap.h"
 
 #ifdef _WIN32
@@ -1438,32 +1433,6 @@ print_usage (FILE *output)
             MAX_PACKET);
 }
 
-static void
-get_text2pcap_compiled_info(GString *str)
-{
-    /* LIBZ */
-    g_string_append(str, ", ");
-#ifdef HAVE_LIBZ
-    g_string_append(str, "with libz ");
-#ifdef ZLIB_VERSION
-    g_string_append(str, ZLIB_VERSION);
-#else /* ZLIB_VERSION */
-    g_string_append(str, "(version unknown)");
-#endif /* ZLIB_VERSION */
-#else /* HAVE_LIBZ */
-    g_string_append(str, "without libz");
-#endif /* HAVE_LIBZ */
-}
-
-static void
-get_text2pcap_runtime_info(GString *str)
-{
-    /* zlib */
-#if defined(HAVE_LIBZ) && !defined(_WIN32)
-    g_string_append_printf(str, ", with libz %s", zlibVersion());
-#endif
-}
-
 /*----------------------------------------------------------------------
  * Parse CLI options
  */
@@ -1486,10 +1455,10 @@ parse_options (int argc, char *argv[])
 #endif /* _WIN32 */
 
     /* Get the compile-time version information string */
-    comp_info_str = get_compiled_version_info(NULL, get_text2pcap_compiled_info);
+    comp_info_str = get_compiled_version_info(NULL, NULL);
 
     /* get the run-time version information string */
-    runtime_info_str = get_runtime_version_info(get_text2pcap_runtime_info);
+    runtime_info_str = get_runtime_version_info(NULL);
 
     /* Add it to the information to be reported on a crash. */
     ws_add_crash_info("Text2pcap (Wireshark) %s\n"

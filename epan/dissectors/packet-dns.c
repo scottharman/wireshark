@@ -1511,7 +1511,7 @@ add_rr_to_tree(proto_tree  *rr_tree, tvbuff_t *tvb, int offset,
     proto_tree_add_item(rr_tree, hf_dns_rr_class, tvb, offset, 2, ENC_BIG_ENDIAN);
   }
   offset += 2;
-  ttl_item = proto_tree_add_item(rr_tree, hf_dns_rr_ttl, tvb, offset, 4, ENC_BIG_ENDIAN|ENC_TIME_TIMESPEC);
+  ttl_item = proto_tree_add_item(rr_tree, hf_dns_rr_ttl, tvb, offset, 4, ENC_BIG_ENDIAN);
   if (tvb_get_ntohl(tvb, offset) & 0x80000000) {
     expert_add_info(pinfo, ttl_item, &ei_ttl_negative);
   }
@@ -2776,6 +2776,7 @@ dissect_dns_answer(tvbuff_t *tvb, int offsetx, int dns_data_offset,
             rropt_len  -= 8;
             optlen -= 8;
             proto_tree_add_item(rropt_tree, hf_dns_opt_cookie_server, tvb, cur_offset, optlen, ENC_NA);
+            cur_offset += optlen;
             rropt_len  -= optlen;
         break;
           case O_EDNS_TCP_KA:
@@ -4105,8 +4106,8 @@ proto_reg_handoff_dns(void)
     dissector_add_uint("sctp.ppi",  DNS_PAYLOAD_PROTOCOL_ID, dns_handle);
 #endif
     stats_tree_register("dns", "dns", "DNS", 0, dns_stats_tree_packet, dns_stats_tree_init, NULL);
-    gssapi_handle  = find_dissector("gssapi");
-    ntlmssp_handle = find_dissector("ntlmssp");
+    gssapi_handle  = find_dissector_add_dependency("gssapi", proto_dns);
+    ntlmssp_handle = find_dissector_add_dependency("ntlmssp", proto_dns);
     ssl_dissector_add(TCP_PORT_DNS_TLS, dns_handle);
     dtls_dissector_add(UDP_PORT_DNS_DTLS, dns_handle);
     Initialized    = TRUE;
@@ -4385,7 +4386,7 @@ proto_register_dns(void)
 
     { &hf_dns_rr_ttl,
       { "Time to live", "dns.resp.ttl",
-        FT_UINT32, BASE_DEC, NULL, 0x0,
+        FT_INT32, BASE_DEC, NULL, 0x0,
         "Response TTL", HFILL }},
 
     { &hf_dns_rr_len,
@@ -5612,7 +5613,7 @@ proto_register_dns(void)
                                         "DNS address resolution settings can be changed in the Name Resolution preferences",
                                         "DNS address resolution settings can be changed in the Name Resolution preferences");
 
-  dns_tsig_dissector_table = register_dissector_table("dns.tsig.mac", "DNS TSIG MAC Dissectors", FT_STRING, BASE_NONE, DISSECTOR_TABLE_NOT_ALLOW_DUPLICATE);
+  dns_tsig_dissector_table = register_dissector_table("dns.tsig.mac", "DNS TSIG MAC Dissectors", proto_dns, FT_STRING, BASE_NONE, DISSECTOR_TABLE_NOT_ALLOW_DUPLICATE);
 
   dns_handle = register_dissector("dns", dissect_dns, proto_dns);
 

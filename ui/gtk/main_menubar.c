@@ -26,8 +26,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <wsutil/u3.h>
-
 #include <epan/packet.h>
 #include <epan/prefs.h>
 #include <epan/prefs-int.h>
@@ -4076,10 +4074,7 @@ menu_recent_file_write_all(FILE *rf)
     while (list != NULL) {
         cf_name = (gchar *)list->data;
         if (cf_name) {
-            if(u3_active())
-                fprintf (rf, RECENT_KEY_CAPTURE_FILE ": %s\n", u3_contract_device_path(cf_name));
-            else
-                fprintf (rf, RECENT_KEY_CAPTURE_FILE ": %s\n", cf_name);
+            fprintf (rf, RECENT_KEY_CAPTURE_FILE ": %s\n", cf_name);
         }
         list = g_list_previous(list);
     }
@@ -4708,7 +4703,7 @@ set_menus_for_selected_packet(capture_file *cf)
                          frame_selected);
     set_menu_sensitivity(ui_manager_tree_view_menu, "/TreeViewPopup/ResolveName",
                          frame_selected && (gbl_resolv_flags.mac_name || gbl_resolv_flags.network_name ||
-                                            gbl_resolv_flags.transport_name || gbl_resolv_flags.concurrent_dns));
+                                            gbl_resolv_flags.transport_name));
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/AnalyzeMenu/FollowTCPStream",
                          is_tcp);
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/AnalyzeMenu/FollowUDPStream",
@@ -4721,7 +4716,7 @@ set_menus_for_selected_packet(capture_file *cf)
                          frame_selected && decode_as_ok());
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/ViewMenu/NameResolution/ResolveName",
                          frame_selected && (gbl_resolv_flags.mac_name || gbl_resolv_flags.network_name ||
-                                            gbl_resolv_flags.transport_name || gbl_resolv_flags.concurrent_dns));
+                                            gbl_resolv_flags.transport_name));
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/ToolsMenu/FirewallACLRules",
                          frame_selected);
     set_menu_sensitivity(ui_manager_main_menubar, "/Menubar/StatisticsMenu/TCPStreamGraphMenu",

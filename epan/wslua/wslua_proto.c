@@ -112,8 +112,8 @@ WSLUA_CONSTRUCTOR Proto_new(lua_State* L) {
 
     loname = g_ascii_strdown(name, -1);
     if (proto_check_field_name(loname)) {
-        WSLUA_ARG_ERROR(Proto_new,NAME,"invalid character in name");
         g_free(loname);
+        WSLUA_ARG_ERROR(Proto_new,NAME,"invalid character in name");
         return 0;
     }
 
@@ -121,9 +121,9 @@ WSLUA_CONSTRUCTOR Proto_new(lua_State* L) {
     if ((proto_get_id_by_short_name(hiname) != -1) ||
         (proto_get_id_by_filter_name(loname) != -1))
     {
-        WSLUA_ARG_ERROR(Proto_new,NAME,"there cannot be two protocols with the same name");
         g_free(loname);
         g_free(hiname);
+        WSLUA_ARG_ERROR(Proto_new,NAME,"there cannot be two protocols with the same name");
         return 0;
     }
 
@@ -253,6 +253,11 @@ WSLUA_METHOD Proto_register_heuristic(lua_State* L) {
     if (!has_heur_dissector_list(listname)) {
         luaL_error(L, "there is no heuristic list for '%s'", listname);
         return 0;
+    }
+
+    /* verify that this is not already registered */
+    if (find_heur_dissector_by_unique_short_name(proto->loname)) {
+        luaL_error(L, "'%s' is already registered as heuristic", proto->loname);
     }
 
     /* we'll check if the second form of this function was called: when the second arg is
@@ -492,7 +497,7 @@ static int Proto_set_experts(lua_State* L) {
 }
 
 /* Gets registered as metamethod automatically by WSLUA_REGISTER_CLASS/META */
-static int Proto__gc(lua_State* L _U_) {
+static int Proto__gc(lua_State* L) {
     /* Proto is registered twice, once in protocols_table_ref and once returned from Proto_new.
      * It will not be freed unless deregistered.
      */
@@ -576,6 +581,22 @@ ProtoField wslua_is_field_available(lua_State* L, const char* field_abbr) {
     lua_pop(L, 1); /* protocols_table_ref */
 
     return NULL;
+}
+
+int wslua_deregister_heur_dissectors(lua_State* L) {
+    /* for each registered heur dissector do... */
+    lua_rawgeti(L, LUA_REGISTRYINDEX, lua_heur_dissectors_table_ref);
+    for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+        const gchar *listname = luaL_checkstring(L, -2);
+        for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+            const gchar *proto_name = luaL_checkstring(L, -2);
+            int proto_id = proto_get_id_by_short_name(proto_name);
+            heur_dissector_delete(listname, heur_dissect_lua, proto_id);
+        }
+    }
+    lua_pop(L, 1); /* lua_heur_dissectors_table_ref */
+
+    return 0;
 }
 
 int wslua_deregister_protocols(lua_State* L) {
@@ -737,7 +758,7 @@ int Proto_commit(lua_State* L) {
 
 static guint
 wslua_dissect_tcp_get_pdu_len(packet_info *pinfo, tvbuff_t *tvb,
-                              int offset, void *data _U_)
+                              int offset, void *data)
 {
     func_saver_t* fs = (func_saver_t*)data;
     lua_State* L = fs->state;

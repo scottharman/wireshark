@@ -20,7 +20,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "config.h"
+#include <config.h>
 
 /*
  * Required with GNU libc to get dladdr().
@@ -62,14 +62,11 @@
 #include <wsutil/report_err.h>
 #include <wsutil/privileges.h>
 #include <wsutil/file_util.h>
-#include <wsutil/ws_diag_control.h>
 
 #include <wiretap/wtap.h>   /* for WTAP_ERR_SHORT_WRITE */
 
 #define PROFILES_DIR    "profiles"
 #define PLUGINS_DIR_NAME    "plugins"
-
-#define U3_MY_CAPTURES  "\\My Captures"
 
 char *persconffile_dir = NULL;
 char *persdatafile_dir = NULL;
@@ -475,8 +472,7 @@ init_progfile_dir(const char *arg0
      */
     if (GetModuleFileName(NULL, prog_pathname_w, G_N_ELEMENTS(prog_pathname_w)) != 0 && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
         /*
-         * XXX - Should we use g_utf16_to_utf8(), as in
-         * getenv_utf8()?
+         * XXX - Should we use g_utf16_to_utf8()?
          */
         prog_pathname = utf_16to8(prog_pathname_w);
         /*
@@ -529,8 +525,8 @@ init_progfile_dir(const char *arg0
     char *prog_pathname;
     char *curdir;
     long path_max;
-    char *pathstr;
-    char *path_start, *path_end;
+    const char *pathstr;
+    const char *path_start, *path_end;
     size_t path_component_len, path_len;
     char *retstr;
     char *path;
@@ -545,7 +541,7 @@ init_progfile_dir(const char *arg0
      * set, causes us to look for plugins and the like in the build
      * directory.)
      */
-    if (getenv("WIRESHARK_RUN_FROM_BUILD_DIRECTORY") != NULL
+    if (g_getenv("WIRESHARK_RUN_FROM_BUILD_DIRECTORY") != NULL
         && !started_with_special_privs())
         running_in_build_directory_flag = TRUE;
 
@@ -625,7 +621,7 @@ DIAG_ON(pedantic)
          * that's executable.
          */
         prog_pathname = NULL;   /* haven't found it yet */
-        pathstr = getenv("PATH");
+        pathstr = g_getenv("PATH");
         path_start = pathstr;
         if (path_start != NULL) {
             while (*path_start != '\0') {
@@ -832,9 +828,6 @@ get_progfile_dir(void)
 const char *
 get_datafile_dir(void)
 {
-#ifdef _WIN32
-    char *u3deviceexecpath;
-#endif
     static const char *datafile_dir = NULL;
 
     if (datafile_dir != NULL)
@@ -842,39 +835,27 @@ get_datafile_dir(void)
 
 #ifdef _WIN32
     /*
-     * See if we are running in a U3 environment.
+     * Do we have the pathname of the program?  If so, assume we're
+     * running an installed version of the program.  If we fail,
+     * we don't change "datafile_dir", and thus end up using the
+     * default.
+     *
+     * XXX - does NSIS put the installation directory into
+     * "\HKEY_LOCAL_MACHINE\SOFTWARE\Wireshark\InstallDir"?
+     * If so, perhaps we should read that from the registry,
+     * instead.
      */
-    u3deviceexecpath = getenv_utf8("U3_DEVICE_EXEC_PATH");
-
-    if (u3deviceexecpath != NULL) {
+    if (progfile_dir != NULL) {
         /*
-         * We are; use the U3 device executable path.
+         * Yes, we do; use that.
          */
-        datafile_dir = u3deviceexecpath;
+        datafile_dir = progfile_dir;
     } else {
         /*
-         * Do we have the pathname of the program?  If so, assume we're
-         * running an installed version of the program.  If we fail,
-         * we don't change "datafile_dir", and thus end up using the
-         * default.
-         *
-         * XXX - does NSIS put the installation directory into
-         * "\HKEY_LOCAL_MACHINE\SOFTWARE\Wireshark\InstallDir"?
-         * If so, perhaps we should read that from the registry,
-         * instead.
+         * No, we don't.
+         * Fall back on the default installation directory.
          */
-        if (progfile_dir != NULL) {
-            /*
-             * Yes, we do; use that.
-             */
-            datafile_dir = progfile_dir;
-        } else {
-            /*
-             * No, we don't.
-             * Fall back on the default installation directory.
-             */
-            datafile_dir = "C:\\Program Files\\Wireshark\\";
-        }
+        datafile_dir = "C:\\Program Files\\Wireshark\\";
     }
 #else
 
@@ -893,13 +874,13 @@ get_datafile_dir(void)
         datafile_dir = g_strdup(TOP_SRCDIR);
         return datafile_dir;
     } else {
-        if (getenv("WIRESHARK_DATA_DIR") && !started_with_special_privs()) {
+        if (g_getenv("WIRESHARK_DATA_DIR") && !started_with_special_privs()) {
             /*
              * The user specified a different directory for data files
              * and we aren't running with special privileges.
              * XXX - We might be able to dispense with the priv check
              */
-            datafile_dir = g_strdup(getenv("WIRESHARK_DATA_DIR"));
+            datafile_dir = g_strdup(g_getenv("WIRESHARK_DATA_DIR"));
         }
 #ifdef __APPLE__
         /*
@@ -992,12 +973,12 @@ init_plugin_dir(void)
          */
         plugin_dir = g_strdup_printf("%s/plugins", get_progfile_dir());
     } else {
-        if (getenv("WIRESHARK_PLUGIN_DIR") && !started_with_special_privs()) {
+        if (g_getenv("WIRESHARK_PLUGIN_DIR") && !started_with_special_privs()) {
             /*
              * The user specified a different directory for plugins
              * and we aren't running with special privileges.
              */
-            plugin_dir = g_strdup(getenv("WIRESHARK_PLUGIN_DIR"));
+            plugin_dir = g_strdup(g_getenv("WIRESHARK_PLUGIN_DIR"));
         }
 #ifdef __APPLE__
         /*
@@ -1059,7 +1040,7 @@ static const char *extcap_dir = NULL;
 
 static void init_extcap_dir(void) {
 #ifdef _WIN32
-    char *alt_extcap_path;
+    const char *alt_extcap_path;
 
     /*
      * On Windows, the data file directory is the installation
@@ -1069,7 +1050,7 @@ static void init_extcap_dir(void) {
      * on Windows, the data file directory is the directory
      * in which the Wireshark binary resides.
      */
-    alt_extcap_path = getenv_utf8("WIRESHARK_EXTCAP_DIR");
+    alt_extcap_path = g_getenv("WIRESHARK_EXTCAP_DIR");
     if (alt_extcap_path) {
         /*
          * The user specified a different directory for extcap hooks.
@@ -1088,12 +1069,12 @@ static void init_extcap_dir(void) {
          */
         extcap_dir = g_strdup_printf("%s/extcap", get_progfile_dir());
     } else {
-        if (getenv("WIRESHARK_EXTCAP_DIR") && !started_with_special_privs()) {
+        if (g_getenv("WIRESHARK_EXTCAP_DIR") && !started_with_special_privs()) {
             /*
              * The user specified a different directory for extcap hooks
              * and we aren't running with special privileges.
              */
-            extcap_dir = g_strdup(getenv("WIRESHARK_EXTCAP_DIR"));
+            extcap_dir = g_strdup(g_getenv("WIRESHARK_EXTCAP_DIR"));
         }
 #ifdef __APPLE__
         /*
@@ -1265,20 +1246,8 @@ get_persconffile_dir_no_profile(void)
     /*
      * See if the user has selected an alternate environment.
      */
-    env = getenv_utf8("WIRESHARK_APPDATA");
+    env = g_getenv("WIRESHARK_APPDATA");
     if (env != NULL) {
-        persconffile_dir = g_strdup(env);
-        return persconffile_dir;
-    }
-
-    /*
-     * See if we are running in a U3 environment.
-     */
-    env = getenv_utf8("U3_APP_DATA_PATH");
-    if (env != NULL) {
-        /*
-         * We are; use the U3 application data path.
-         */
         persconffile_dir = g_strdup(env);
         return persconffile_dir;
     }
@@ -1291,7 +1260,7 @@ get_persconffile_dir_no_profile(void)
      * so means you can use Wireshark even if the home directory
      * is an inaccessible network drive.
      */
-    env = getenv_utf8("APPDATA");
+    env = g_getenv("APPDATA");
     if (env != NULL) {
         /*
          * Concatenate %APPDATA% with "\Wireshark".
@@ -1303,7 +1272,7 @@ get_persconffile_dir_no_profile(void)
     /*
      * OK, %APPDATA% wasn't set, so use %USERPROFILE%\Application Data.
      */
-    env = getenv_utf8("USERPROFILE");
+    env = g_getenv("USERPROFILE");
     if (env != NULL) {
         persconffile_dir = g_build_filename(env, "Application Data", "Wireshark", NULL);
         return persconffile_dir;
@@ -1333,7 +1302,7 @@ get_persconffile_dir_no_profile(void)
      * (Note: before GLib 2.36, g_get_home_dir() didn't look at $HOME,
      * but we always want to do so, so we don't use g_get_home_dir().)
      */
-    homedir = getenv("HOME");
+    homedir = g_getenv("HOME");
     if (homedir == NULL) {
         /*
          * It's not set.
@@ -1680,9 +1649,7 @@ copy_persconffile_profile(const char *toname, const char *fromname, gboolean fro
 /*
  * Get the (default) directory in which personal data is stored.
  *
- * On Win32, this is the "My Documents" folder in the personal profile,
- * except that, if we're running from a U3 device, this is the
- * "$U3_DEVICE_DOCUMENT_PATH\My Captures" folder.
+ * On Win32, this is the "My Documents" folder in the personal profile.
  * On UNIX this is simply the current directory.
  */
 /* XXX - should this and the get_home_dir() be merged? */
@@ -1690,7 +1657,6 @@ extern const char *
 get_persdatafile_dir(void)
 {
 #ifdef _WIN32
-    char *u3devicedocumentpath;
     TCHAR tszPath[MAX_PATH];
 
     /* Return the cached value, if available */
@@ -1698,27 +1664,14 @@ get_persdatafile_dir(void)
         return persdatafile_dir;
 
     /*
-     * See if we are running in a U3 environment.
+     * Hint: SHGetFolderPath is not available on MSVC 6 - without
+     * Platform SDK
      */
-    u3devicedocumentpath = getenv_utf8("U3_DEVICE_DOCUMENT_PATH");
-
-    if (u3devicedocumentpath != NULL) {
-        /* the "My Captures" sub-directory is created (if it doesn't
-           exist) by u3util.exe when the U3 Wireshark is first run */
-
-        persdatafile_dir = g_strdup_printf("%s%s", u3devicedocumentpath, U3_MY_CAPTURES);
+    if (SHGetSpecialFolderPath(NULL, tszPath, CSIDL_PERSONAL, FALSE)) {
+        persdatafile_dir = g_utf16_to_utf8(tszPath, -1, NULL, NULL, NULL);
         return persdatafile_dir;
     } else {
-        /*
-         * Hint: SHGetFolderPath is not available on MSVC 6 - without
-         * Platform SDK
-         */
-        if (SHGetSpecialFolderPath(NULL, tszPath, CSIDL_PERSONAL, FALSE)) {
-            persdatafile_dir = g_utf16_to_utf8(tszPath, -1, NULL, NULL, NULL);
-            return persdatafile_dir;
-        } else {
-            return "";
-        }
+        return "";
     }
 #else
     return "";
@@ -1740,7 +1693,7 @@ static const char *
 get_home_dir(void)
 {
     static const char *home = NULL;
-    char *homedrive, *homepath;
+    const char *homedrive, *homepath;
     char *homestring;
     char *lastsep;
 
@@ -1753,9 +1706,9 @@ get_home_dir(void)
      * Is there a chance that it might be set but one or more of
      * HOMEDRIVE or HOMEPATH isn't set?
      */
-    homedrive = getenv_utf8("HOMEDRIVE");
+    homedrive = g_getenv("HOMEDRIVE");
     if (homedrive != NULL) {
-        homepath = getenv_utf8("HOMEPATH");
+        homepath = g_getenv("HOMEPATH");
         if (homepath != NULL) {
             /*
              * This is cached, so we don't need to worry about

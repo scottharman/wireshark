@@ -39,19 +39,18 @@
  *  3. This notice may not be removed or altered from any source distribution.
  */
 
-#include "config.h"
+#include <config.h>
 
 #include <errno.h>
 #include <string.h>
 #include "wtap-int.h"
 #include "file_wrappers.h"
-#include <wsutil/ws_diag_control.h>
 #include <wsutil/file_util.h>
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 #define ZLIB_CONST
 #include <zlib.h>
-#endif /* HAVE_LIBZ */
+#endif /* HAVE_ZLIB */
 
 /*
  * See RFC 1952 for a description of the gzip file format.
@@ -70,7 +69,7 @@
  * compression types.
  */
 const char *compressed_file_extension_table[] = {
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     "gz",
 #endif
     NULL
@@ -83,7 +82,7 @@ const char *compressed_file_extension_table[] = {
 typedef enum {
     UNKNOWN,       /* unknown - look for a gzip header */
     UNCOMPRESSED,  /* uncompressed - copy input directly */
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     ZLIB,          /* decompress a zlib stream */
     GZIP_AFTER_HEADER
 #endif
@@ -113,7 +112,7 @@ struct wtap_reader {
 
     guint avail_in;            /* number of bytes available at next_in */
     unsigned char *next_in;    /* next input byte */
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     /* zlib inflate stream */
     z_stream strm;             /* stream structure in-place (not a pointer) */
     gboolean dont_check_crc;   /* TRUE if we aren't supposed to check the CRC */
@@ -233,9 +232,14 @@ fast_seek_header(FILE_T file, gint64 in_pos, gint64 out_pos,
 }
 
 static void
-fast_seek_reset(FILE_T state _U_)
+fast_seek_reset(
+#ifdef HAVE_ZLIB
+    FILE_T state)
+#else
+    FILE_T state _U_)
+#endif
 {
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     if (state->compression == ZLIB && state->fast_seek_cur) {
         struct zlib_cur_seek_point *cur = (struct zlib_cur_seek_point *) state->fast_seek_cur;
 
@@ -244,7 +248,7 @@ fast_seek_reset(FILE_T state _U_)
 #endif
 }
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 
 /* Get next byte from input, or -1 if end or error.
  *
@@ -568,7 +572,7 @@ gz_head(FILE_T state)
     }
 
     /* look for the gzip magic header bytes 31 and 139 */
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     if (state->next_in[0] == 31) {
         state->avail_in--;
         state->next_in++;
@@ -701,7 +705,7 @@ fill_out_buffer(FILE_T state)
             return -1;
         state->next = state->out;
     }
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     else if (state->compression == ZLIB) {      /* decompress */
         zlib_read(state, state->out, state->size << 1);
     }
@@ -820,7 +824,7 @@ file_fdopen(int fd)
         return NULL;
     }
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     /* allocate inflate memory */
     state->strm.zalloc = Z_NULL;
     state->strm.zfree = Z_NULL;
@@ -847,7 +851,7 @@ file_open(const char *path)
 {
     int fd;
     FILE_T ft;
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     const char *suffixp;
 #endif
 
@@ -870,7 +874,7 @@ file_open(const char *path)
         return NULL;
     }
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
     /*
      * If this file's name ends in ".caz", it's probably a compressed
      * Windows Sniffer file.  The compression is gzip, but if we
@@ -986,7 +990,7 @@ file_seek(FILE_T file, gint64 offset, int whence, int *err)
          * has been called on this file, which should never be the case
          * for a pipe.
          */
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
         if (here->compression == ZLIB) {
 #ifdef HAVE_INFLATEPRIME
             off = here->in - (here->data.zlib.bits ? 1 : 0);
@@ -1018,7 +1022,7 @@ file_seek(FILE_T file, gint64 offset, int whence, int *err)
         file->err_info = NULL;
         file->avail_in = 0;
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
         if (here->compression == ZLIB) {
             z_stream *strm = &file->strm;
 
@@ -1439,7 +1443,7 @@ file_close(FILE_T file)
 
     /* free memory and close file */
     if (file->size) {
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
         inflateEnd(&(file->strm));
 #endif
         g_free(file->out);
@@ -1458,7 +1462,7 @@ file_close(FILE_T file)
         ws_close(fd);
 }
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 /* internal gzip file state data structure for writing */
 struct wtap_writer {
     int fd;                 /* file descriptor */

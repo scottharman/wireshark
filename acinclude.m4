@@ -97,156 +97,6 @@ AC_DEFUN([AC_WIRESHARK_POP_FLAGS],
   LDFLAGS="$ac_ws_LDFLAGS_saved"
 ])
 
-#
-# AC_WIRESHARK_TIMEZONE_ABBREV
-#
-
-AC_DEFUN([AC_WIRESHARK_TIMEZONE_ABBREV],
-[
-  AC_CACHE_CHECK([for tm_zone in struct tm],
-    ac_cv_wireshark_have_tm_zone,
-    [
-      AC_TRY_COMPILE(
-        [#include <time.h>],
-        [struct tm t; t.tm_zone;],
-        ac_cv_wireshark_have_tm_zone=yes,
-        ac_cv_wireshark_have_tm_zone=no)
-    ])
-  if test $ac_cv_wireshark_have_tm_zone = yes; then
-    AC_DEFINE(HAVE_TM_ZONE, 1, [Define if tm_zone field exists in struct tm])
-  else
-    AC_CACHE_CHECK([for tzname],
-      ac_cv_wireshark_have_tzname,
-      [
-        AC_TRY_LINK(
-[#include <time.h>
-#include <stdio.h>],
-          [printf("%s", tzname[0]);],
-          ac_cv_wireshark_have_tzname=yes,
-          ac_cv_wireshark_have_tzname=no)
-      ])
-    if test $ac_cv_wireshark_have_tzname = yes; then
-      AC_DEFINE(HAVE_TZNAME, 1, [Define if tzname array exists])
-    fi
-  fi
-])
-
-
-#
-# AC_WIRESHARK_STRUCT_ST_FLAGS
-#
-dnl AC_STRUCT_ST_BLKSIZE extracted from the file in question,
-dnl "acspecific.m4" in GNU Autoconf 2.12, and turned into
-dnl AC_WIRESHARK_STRUCT_ST_FLAGS, which checks if "struct stat"
-dnl has the 4.4BSD "st_flags" member, and defines HAVE_ST_FLAGS; that's
-dnl what's in this file.
-dnl Done by Guy Harris <guy@alum.mit.edu> on 2012-06-02.
-
-dnl ### Checks for structure members
-
-AC_DEFUN([AC_WIRESHARK_STRUCT_ST_FLAGS],
-[AC_CACHE_CHECK([for st_flags in struct stat], ac_cv_wireshark_struct_st_flags,
-[AC_TRY_COMPILE([#include <sys/stat.h>], [struct stat s; s.st_flags;],
-ac_cv_wireshark_struct_st_flags=yes, ac_cv_wireshark_struct_st_flags=no)])
-if test $ac_cv_wireshark_struct_st_flags = yes; then
-  AC_DEFINE(HAVE_ST_FLAGS, 1, [Define if st_flags field exists in struct stat])
-fi
-])
-
-
-#
-# AC_WIRESHARK_STRUCT_SA_LEN
-#
-dnl AC_STRUCT_ST_BLKSIZE extracted from the file in question,
-dnl "acspecific.m4" in GNU Autoconf 2.12, and turned into
-dnl AC_WIRESHARK_STRUCT_SA_LEN, which checks if "struct sockaddr"
-dnl has the 4.4BSD "sa_len" member, and defines HAVE_SA_LEN; that's
-dnl what's in this file.
-dnl Done by Guy Harris <guy@alum.mit.edu> on 1998-11-14.
-
-dnl ### Checks for structure members
-
-AC_DEFUN([AC_WIRESHARK_STRUCT_SA_LEN],
-[AC_CACHE_CHECK([for sa_len in struct sockaddr], ac_cv_wireshark_struct_sa_len,
-[AC_TRY_COMPILE([#include <sys/types.h>
-#include <sys/socket.h>], [struct sockaddr s; s.sa_len;],
-ac_cv_wireshark_struct_sa_len=yes, ac_cv_wireshark_struct_sa_len=no)])
-if test $ac_cv_wireshark_struct_sa_len = yes; then
-  AC_DEFINE(HAVE_SA_LEN, 1, [Define if sa_len field exists in struct sockaddr])
-fi
-])
-
-
-#
-# AC_WIRESHARK_GETADDRINFO_LIB_CHECK
-#
-# Checks whether we have "getaddrinfo()" and whether we need "-lnsl" to get it.
-AC_DEFUN([AC_WIRESHARK_GETADDRINFO_LIB_CHECK],
-[
-    AC_CHECK_FUNCS(getaddrinfo, ,
-	AC_CHECK_LIB(nsl, getaddrinfo,
-		     [
-			 NSL_LIBS="-lnsl"
-			 AC_DEFINE(HAVE_GETADDRINFO, 1, [Defined if we have getaddrinfo])
-		     ]))
-    AC_SUBST(NSL_LIBS)
-])
-
-#
-# AC_WIRESHARK_GETHOSTBY_LIB_CHECK
-#
-# Checks whether we need "-lnsl" to get "gethostby*()", which we use
-# in "resolv.c".
-#
-# Adapted from stuff in the AC_PATH_XTRA macro in "acspecific.m4" in
-# GNU Autoconf 2.13; the comment came from there.
-# Done by Guy Harris <guy@alum.mit.edu> on 2000-01-14.
-#
-AC_DEFUN([AC_WIRESHARK_GETHOSTBY_LIB_CHECK],
-[
-    # msh@cis.ufl.edu says -lnsl (and -lsocket) are needed for his 386/AT,
-    # to get the SysV transport functions.
-    # chad@anasazi.com says the Pyramid MIS-ES running DC/OSx (SVR4)
-    # needs -lnsl.
-    # The nsl library prevents programs from opening the X display
-    # on Irix 5.2, according to dickey@clark.net.
-    AC_CHECK_FUNCS(gethostbyname, ,
-	AC_CHECK_LIB(nsl, gethostbyname,
-		     [
-			NSL_LIBS="-lnsl"
-			AC_DEFINE(HAVE_GETHOSTBYNAME, 1, [Defined if we have gethostbyname])
-		     ]))
-    AC_SUBST(NSL_LIBS)
-])
-
-#
-# AC_WIRESHARK_SOCKET_LIB_CHECK
-#
-# Checks whether we need "-lsocket" to get "socket()", which is used
-# by libpcap on some platforms - and, in effect, "gethostbyname()" or
-# "getaddrinfo()" on most if not all platforms (so that it can use NIS or
-# DNS or... to look up host names).
-#
-# Adapted from stuff in the AC_PATH_XTRA macro in "acspecific.m4" in
-# GNU Autoconf 2.13; the comment came from there.
-# Done by Guy Harris <guy@alum.mit.edu> on 2000-01-14.
-#
-# We use "connect" because that's what AC_PATH_XTRA did.
-#
-AC_DEFUN([AC_WIRESHARK_SOCKET_LIB_CHECK],
-[
-    # lieder@skyler.mavd.honeywell.com says without -lsocket,
-    # socket/setsockopt and other routines are undefined under SCO ODT
-    # 2.0.  But -lsocket is broken on IRIX 5.2 (and is not necessary
-    # on later versions), says simon@lia.di.epfl.ch: it contains
-    # gethostby* variants that don't use the nameserver (or something).
-    # -lsocket must be given before -lnsl if both are needed.
-    # We assume that if connect needs -lnsl, so does gethostbyname.
-    AC_CHECK_FUNC(connect, ,
-      AC_CHECK_LIB(socket, connect, SOCKET_LIBS="-lsocket",
-		AC_MSG_ERROR(Function 'socket' not found.), $NSL_LIBS))
-    AC_SUBST(SOCKET_LIBS)
-])
 
 #
 # AC_WIRESHARK_BREAKLOOP_TRY_LINK
@@ -343,10 +193,7 @@ AC_DEFUN([AC_WIRESHARK_PCAP_CHECK],
 	    #
 	    AC_MSG_CHECKING(for extraneous pcap header directories)
 	    found_pcap_dir=""
-	    pcap_dir_list="/usr/include/pcap $prefix/include/pcap $prefix/include"
-	    if test "x$ac_cv_enable_usr_local" = "xyes" ; then
-	      pcap_dir_list="$pcap_dir_list /usr/local/include/pcap"
-	    fi
+	    pcap_dir_list="/usr/local/include/pcap /usr/include/pcap $prefix/include/pcap $prefix/include"
 	    for pcap_dir in $pcap_dir_list
 	    do
 	      if test -d $pcap_dir ; then
@@ -416,7 +263,7 @@ and did you also install that package?]]))
 	      for extras in "-lcfg -lodm" "-lpfring"
 	      do
 		AC_MSG_CHECKING([for pcap_open_live in -lpcap with $extras])
-		LIBS="-lpcap $extras"
+		LIBS="-lpcap $extras $ac_save_LIBS"
 		#
 		# XXX - can't we use AC_CHECK_LIB here?
 		#
@@ -446,7 +293,7 @@ and did you also install that package?]]))
 		AC_MSG_ERROR([Can't link with library libpcap.])
 	      fi
 	      LIBS=$ac_save_LIBS
-	    ], $SOCKET_LIBS $NSL_LIBS)
+	    ])
 	fi
 	AC_SUBST(PCAP_LIBS)
 
@@ -455,7 +302,7 @@ and did you also install that package?]]))
 	# libpcap.
 	#
 	ac_save_LIBS="$LIBS"
-	LIBS="$PCAP_LIBS $SOCKET_LIBS $NSL_LIBS $LIBS"
+	LIBS="$PCAP_LIBS $LIBS"
 	AC_CHECK_FUNCS(pcap_open_dead pcap_freecode)
 	#
 	# pcap_breakloop may be present in the library but not declared
@@ -575,7 +422,7 @@ install a newer version of the header file.])
 AC_DEFUN([AC_WIRESHARK_PCAP_REMOTE_CHECK],
 [
     ac_save_LIBS="$LIBS"
-    LIBS="$PCAP_LIBS $SOCKET_LIBS $NSL_LIBS $LIBS"
+    LIBS="$PCAP_LIBS $LIBS"
     AC_DEFINE(HAVE_REMOTE, 1, [Define to 1 to enable remote
               capturing feature in WinPcap library])
     AC_CHECK_FUNCS(pcap_open)
@@ -659,8 +506,8 @@ AC_DEFUN([AC_WIRESHARK_ZLIB_CHECK],
 		  WS_CPPFLAGS="$WS_CPPFLAGS -I$zlib_dir/include"
 		  AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, $zlib_dir/lib)
 		fi
-		LIBS="$LIBS -lz"
-		AC_DEFINE(HAVE_LIBZ, 1, [Define to use libz library])
+		LIBS="-lz $LIBS"
+		AC_DEFINE(HAVE_ZLIB, 1, [Define to use zlib library])
 		#
 		# Check for "inflatePrime()" in zlib, which we need
 		# in order to read compressed capture files.
@@ -720,10 +567,21 @@ AC_DEFUN([AC_WIRESHARK_LIBLUA_CHECK],[
 		# work reliably (some package names are not searched for).
 		for pkg in "lua < 5.3" lua5.2 lua-5.2 lua52 lua5.1 lua-5.1 lua51 lua5.0 lua-5.0 lua50
 		do
-			PKG_CHECK_MODULES(LUA, $pkg, [have_lua=yes], [true])
+			AC_MSG_CHECKING(if you have $pkg)
+			PKG_CHECK_EXISTS($pkg,
+			[
+			 AC_MSG_RESULT(yes)
+			 have_lua=yes
+			],
+			[
+			 AC_MSG_RESULT(no)
+			])
 
 			if test "x$have_lua" = "xyes"
 			then
+				PKG_WIRESHARK_CHECK_SYSTEM_MODULES(LUA, $pkg)
+				CPPFLAGS="$LUA_CFLAGS $CPPFLAGS"
+				AC_CHECK_HEADERS(lua.h lualib.h lauxlib.h)
 				break
 			fi
 		done
@@ -740,7 +598,7 @@ AC_DEFUN([AC_WIRESHARK_LIBLUA_CHECK],[
 		then
 			# The user didn't tell us where to look so we'll look in some
 			# standard locations.
-			want_lua_dir="/usr /usr/local $prefix"
+			want_lua_dir="/usr/local /usr $prefix"
 		fi
 		for dir in $want_lua_dir
 		do
@@ -802,15 +660,12 @@ AC_DEFUN([AC_WIRESHARK_LIBLUA_CHECK],[
 				# searches the specified directory.
 				#
 				# XXX - lib64?
-				wireshark_save_LIBS="$LIBS"
-				LIBS="$LIBS -L$lua_dir/lib"
+				LDFLAGS="-L$lua_dir/lib $LDFLAGS"
 				AC_SEARCH_LIBS(luaL_openlibs, [lua-${lua_ver} lua${lua_ver} lua],
 				[
 					LUA_LIBS="-L$lua_dir/lib $ac_cv_search_luaL_openlibs -lm"
-					LIBS="$wireshark_save_LIBS"
 					have_lua=yes
 				],[
-					LIBS="$wireshark_save_LIBS"
 					have_lua=no
 				], -lm)
 			fi
@@ -845,7 +700,7 @@ AC_DEFUN([AC_WIRESHARK_LIBPORTAUDIO_CHECK],[
 		CPPFLAGS="$CPPFLAGS -I$portaudio_dir/include"
 		LDFLAGS="$LDFLAGS -L$portaudio_dir/lib"
 	fi
-	LIBS="$LIBS -lportaudio"
+	LIBS="-lportaudio $LIBS"
 
 	#
 	# Make sure we have "portaudio.h".  If we don't, it means we probably
@@ -955,21 +810,6 @@ AC_DEFUN([AC_WIRESHARK_RPM_CHECK],
 	fi
 ])
 
-#
-# AC_WIRESHARK_GNU_SED_CHECK
-# Checks if GNU sed is the first sed in PATH.
-#
-AC_DEFUN([AC_WIRESHARK_GNU_SED_CHECK],
-[
-	AC_MSG_CHECKING(for GNU sed as first sed in PATH)
-	if  ( sh -c "sed --version" </dev/null 2> /dev/null | grep "GNU sed" 2>&1 > /dev/null ) ;  then
-		AC_MSG_RESULT(yes)
-		HAVE_GNU_SED=yes
-	else
-		AC_MSG_RESULT(no)
-		HAVE_GNU_SED=no
-	fi
-])
 
 #
 # AC_WIRESHARK_C_ARES_CHECK
@@ -980,53 +820,15 @@ AC_DEFUN([AC_WIRESHARK_C_ARES_CHECK],
 
 	if test "x$want_c_ares" = "xdefaultyes"; then
 		want_c_ares=yes
-		if test "x$ac_cv_enable_usr_local" = "xyes" ; then
-			withval=/usr/local
-			if test -d "$withval"; then
-				AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, ${withval}/lib)
-			fi
-		fi
 	fi
 
 	if test "x$want_c_ares" = "xyes"; then
 		AC_CHECK_LIB(cares, ares_init,
 		  [
 		    C_ARES_LIBS=-lcares
-	    	AC_DEFINE(HAVE_C_ARES, 1, [Define to use c-ares library])
-		have_good_c_ares=yes
-		  ],, $SOCKET_LIBS $NSL_LIBS
-		)
-	else
-		AC_MSG_RESULT(not required)
-	fi
-])
-
-
-#
-# AC_WIRESHARK_ADNS_CHECK
-#
-AC_DEFUN([AC_WIRESHARK_ADNS_CHECK],
-[
-	want_adns=defaultyes
-
-	if test "x$want_adns" = "xdefaultyes"; then
-		want_adns=yes
-		if test "x$ac_cv_enable_usr_local" = "xyes" ; then
-			withval=/usr/local
-			if test -d "$withval"; then
-				AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, ${withval}/lib)
-			fi
-		fi
-	fi
-
-	if test "x$want_adns" = "xyes"; then
-		AC_CHECK_LIB(adns, adns_init,
-		  [
-		    ADNS_LIBS=-ladns
-		    AC_DEFINE(HAVE_GNU_ADNS, 1, [Define to use GNU ADNS library])
-		    have_good_adns=yes
-		  ],, $SOCKET_LIBS $NSL_LIBS
-		)
+		    AC_DEFINE(HAVE_C_ARES, 1, [Define to use c-ares library])
+		    have_good_c_ares=yes
+		  ])
 	else
 		AC_MSG_RESULT(not required)
 	fi
@@ -1042,12 +844,6 @@ AC_DEFUN([AC_WIRESHARK_LIBCAP_CHECK],
 
 	if test "x$want_libcap" = "xdefaultyes"; then
 		want_libcap=yes
-		if test "x$ac_cv_enable_usr_local" = "xyes" ; then
-			withval=/usr/local
-			if test -d "$withval"; then
-				AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, ${withval}/lib)
-			fi
-		fi
 	fi
 
 	if test "x$want_libcap" = "xyes"; then
@@ -1194,7 +990,7 @@ AC_DEFUN([AC_WIRESHARK_KRB5_CHECK],
 		found_krb5_kt_resolve=no
 		for extras in "" "-lresolv"
 		do
-		    LIBS="$KRB5_LIBS $extras"
+		    LIBS="$KRB5_LIBS $extras $wireshark_save_LIBS"
 		    if test -z "$extras"
 		    then
 			AC_MSG_CHECKING([whether $ac_krb5_version includes krb5_kt_resolve])
@@ -1209,11 +1005,12 @@ AC_DEFUN([AC_WIRESHARK_KRB5_CHECK],
 			],
 			[
 			    #
-			    # We found "krb5_kt_resolve()", and required
-			    # the libraries in extras as well.
+			    # We found "krb5_kt_resolve()".
 			    #
 			    AC_MSG_RESULT(yes)
-			    KRB5_LIBS="$LIBS"
+			    if test -n "$extras"; then
+			      KRB5_LIBS="$KRB5_LIBS $extras"
+			    fi
 			    AC_DEFINE(HAVE_KERBEROS, 1, [Define to use kerberos])
 	    		    if test "x$ac_krb5_version" = "xHEIMDAL"
 			    then
@@ -1328,12 +1125,6 @@ AC_DEFUN([AC_WIRESHARK_GEOIP_CHECK],
 
 	if test "x$want_geoip" = "xdefaultyes"; then
 		want_geoip=yes
-		if test "x$ac_cv_enable_usr_local" = "xyes" ; then
-			withval=/usr/local
-			if test -d "$withval"; then
-				AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, ${withval}/lib)
-			fi
-		fi
 	fi
 
 	if test "x$want_geoip" = "xyes"; then
@@ -1365,12 +1156,6 @@ AC_DEFUN([AC_WIRESHARK_LIBSSH_CHECK],
 
 	if test "x$want_libssh" = "xdefaultyes"; then
 		want_libssh=yes
-		if test "x$ac_cv_enable_usr_local" = "xyes" ; then
-			withval=/usr/local
-			if test -d "$withval"; then
-				AC_WIRESHARK_ADD_DASH_L(WS_LDFLAGS, ${withval}/lib)
-			fi
-		fi
 	fi
 
 	if test "x$want_libssh" = "xyes"; then
@@ -1611,7 +1396,7 @@ if test "x$ac_supports_gcc_flags" = "xyes" ; then
                 # with which we're building Wireshark, so add the flags
                 # to the flags for that compiler as well.
                 #
-                CFLAGS_FOR_BUILD="$CFLAGS_FOR_BUILD $GCC_OPTION"
+                AX_APPEND_FLAG([$GCC_OPTION], [WS_CFLAGS_FOR_BUILD])
               fi
             ],
             [
@@ -1630,7 +1415,7 @@ if test "x$ac_supports_gcc_flags" = "xyes" ; then
             # with which we're building Wireshark, so add the flags
             # to the flags for that compiler as well.
             #
-            CFLAGS_FOR_BUILD="$CFLAGS_FOR_BUILD $GCC_OPTION"
+            AX_APPEND_FLAG([$GCC_OPTION], [WS_CFLAGS_FOR_BUILD])
           fi
         fi
       ],
@@ -1772,7 +1557,7 @@ fi
 AC_DEFUN([AC_WIRESHARK_GCC_FORTIFY_SOURCE_CHECK],
 [
 if test "x$GCC" = "xyes" -o "x$CC" = "xclang" ; then
-  AC_MSG_CHECKING([whether -D_FORTIFY_SOURCE=... can be used (without generating a warning)])
+  AC_MSG_CHECKING([whether -D_FORTIFY_SOURCE=2 can be used (without generating a warning)])
   AC_WIRESHARK_PUSH_FLAGS
   CFLAGS="$CFLAGS -Werror"
   CPPFLAGS="$CPPFLAGS -D_FORTIFY_SOURCE=2"

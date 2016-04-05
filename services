@@ -1368,8 +1368,8 @@ dhcp-failover2    847/tcp # dhcp-failover 2 [Bernard_Volz] [Bernard_Volz]
 dhcp-failover2    847/udp # dhcp-failover 2 [Bernard_Volz] [Bernard_Volz]
 gdoi              848/tcp # GDOI [RFC3547]
 gdoi              848/udp # GDOI [RFC3547]
-domain-s          853/tcp # DNS query-response protocol run over TLS/DTLS [IETF_DPRIVE_Working_Group_Chairs] [Paul_Hoffman_1] 2015-10-08 [draft-ietf-dprive-dns-over-tls] TEMPORARY - registered 2015-10-08, expires 2016-10-08
-domain-s          853/udp # DNS query-response protocol run over TLS/DTLS [IETF_DPRIVE_Working_Group_Chairs] [Dan_Wing] 2015-10-08 [draft-ietf-dprive-dnsodtls] TEMPORARY - registered 2015-10-08, expires 2016-10-08
+domain-s          853/tcp # DNS query-response protocol run over TLS/DTLS [IESG] [IETF_Chair] 2015-10-08 2016-03-29 [RFC-ietf-dprive-dns-over-tls-09]
+domain-s          853/udp # DNS query-response protocol run over TLS/DTLS [IESG] [IETF_Chair] 2015-10-08 2016-03-29 [RFC-ietf-dprive-dns-over-tls-09]
 iscsi             860/tcp # iSCSI [IESG] [IETF_Chair] 2013-08-27 [RFC7143]
 iscsi             860/udp # iSCSI [IESG] [IETF_Chair] 2013-08-27 [RFC7143]
 owamp-control     861/tcp # OWAMP-Control [RFC4656]
@@ -3294,8 +3294,8 @@ dialogic-elmd    1945/tcp # dialogic-elmd [Roger_Kay] [Roger_Kay]
 dialogic-elmd    1945/udp # dialogic-elmd [Roger_Kay] [Roger_Kay]
 tekpls           1946/tcp # tekpls [Brian_Abramson_2] [Brian_Abramson_2]
 tekpls           1946/udp # tekpls [Brian_Abramson_2] [Brian_Abramson_2]
-sentinelsrm      1947/tcp # SentinelSRM [Michael_Zunke_2] [Michael_Zunke_2] 2010-07-23
-sentinelsrm      1947/udp # SentinelSRM [Michael_Zunke_2] [Michael_Zunke_2] 2010-07-23
+sentinelsrm      1947/tcp # SentinelSRM [Michael_Zunke_2] [Michael_Zunke_2] 2010-07-23 Unauthorized Use Known on port 1947
+sentinelsrm      1947/udp # SentinelSRM [Michael_Zunke_2] [Michael_Zunke_2] 2010-07-23 Unauthorized Use Known on port 1947
 eye2eye          1948/tcp # eye2eye [Trevor_Bell] [Trevor_Bell]
 eye2eye          1948/udp # eye2eye [Trevor_Bell] [Trevor_Bell]
 ismaeasdaqlive   1949/tcp # ISMA Easdaq Live [Stephen_Dunne] [Stephen_Dunne]
@@ -7939,6 +7939,10 @@ brcd-vr-req      4415/tcp # Brocade Virtual Router Request [Brocade_Communicatio
 pjj-player       4416/tcp # PJJ Media Player [PJJ_Productions_Inc] [Bruno_Frechette] 2015-11-18
 pjj-player-disc  4416/udp # PJJ Media Player discovery [PJJ_Productions_Inc] [Bruno_Frechette] 2015-11-18
 workflowdir      4417/tcp # Workflow Director Communication [WfDir] [Brian_Doyle] 2015-12-11
+axysbridge       4418/udp # AXYS communication protocol [Duran_Audio_B.V.] [Gerald_van_Beuningen] 2016-03-14
+cbp              4419/tcp # Colnod Binary Protocol [Colsys_s.r.o.] [Jiri_Merth] 2016-03-23
+nvm-express      4420/tcp # NVM Express over Fabrics storage access [NVM_Express_Workgroup] [Amber_Huffman] 2016-03-31
+nvm-express      4420/udp # NVM Express over Fabrics storage access [NVM_Express_Workgroup] [Amber_Huffman] 2016-03-31
 netrockey6       4425/tcp # NetROCKEY6 SMART Plus Service [Feitian_Technologies] [Feitian_Technologies] 2010-09-15
 netrockey6       4425/udp # NetROCKEY6 SMART Plus Service [Feitian_Technologies] [Feitian_Technologies] 2010-09-15
 beacon-port-2    4426/tcp # SMARTS Beacon Port [Eyal_Yardeni] [Eyal_Yardeni] 2003-11
@@ -8073,6 +8077,7 @@ mtsserver        4602/tcp # EAX MTS Server [Pedro_A_Rodriguez] [Pedro_A_Rodrigue
 menandmice-upg   4603/tcp # Men & Mice Upgrade Agent [Eggert_Thorlacius_2] [Eggert_Thorlacius_2] 2010-01-27
 irp              4604/tcp # Identity Registration Protocol [Sixscape_Communications_Pte_Ltd] [Lawrence_E._Hughes] 2014-03-17 2014-08-26
 sixchat          4605/tcp # Direct End to End Secure Chat Protocol [Sixscape_Communications_Pte_Ltd] [Lawrence_E._Hughes] 2014-09-11
+ventoso          4621/udp # Bidirectional single port remote radio VOIP and Control stream [Ventoso_Integrated_Peripherals] [John_Lindsey] 2016-03-04
 playsta2-app     4658/tcp # PlayStation2 App Port
 playsta2-app     4658/udp # PlayStation2 App Port
 playsta2-lob     4659/tcp # PlayStation2 Lobby Port [Noam_Rimon] [Noam_Rimon] 2004-12
@@ -8367,10 +8372,10 @@ scpi-telnet      5024/tcp # SCPI-TELNET [Ryan_Columbus] [Ryan_Columbus] 2002-10
 scpi-telnet      5024/udp # SCPI-TELNET [Ryan_Columbus] [Ryan_Columbus] 2002-10
 scpi-raw         5025/tcp # SCPI-RAW [Ryan_Columbus] [Ryan_Columbus] 2002-10
 scpi-raw         5025/udp # SCPI-RAW [Ryan_Columbus] [Ryan_Columbus] 2002-10
-strexec-d        5026/tcp # Storix I/O daemon (data) [Anthony_Johnson] [Anthony_Johnson] 2005-08
-strexec-d        5026/udp # Storix I/O daemon (data) [Anthony_Johnson] [Anthony_Johnson] 2005-08
-strexec-s        5027/tcp # Storix I/O daemon (stat) [Anthony_Johnson] [Anthony_Johnson] 2005-08
-strexec-s        5027/udp # Storix I/O daemon (stat) [Anthony_Johnson] [Anthony_Johnson] 2005-08
+strexec-d        5026/tcp # Storix I/O daemon (data) [Storix_Inc] [David_Huffman] 2005-08
+strexec-d        5026/udp # Storix I/O daemon (data) [Storix_Inc] [David_Huffman] 2005-08
+strexec-s        5027/tcp # Storix I/O daemon (stat) [Storix_Inc] [David_Huffman] 2005-08
+strexec-s        5027/udp # Storix I/O daemon (stat) [Storix_Inc] [David_Huffman] 2005-08
 qvr              5028/tcp # Quiqum Virtual Relais [Philipp_Marcel_Albre] [Philipp_Marcel_Albre] 2009-07-06
 infobright       5029/tcp # Infobright Database Server [Mark_Windrim] [Mark_Windrim] 2009-07-23
 infobright       5029/udp # Infobright Database Server [Mark_Windrim] [Mark_Windrim] 2009-07-23
@@ -8770,6 +8775,8 @@ spss             5443/tcp # Pearson HTTPS [Pearson] [Pearson] 2008-01-17
 spss             5443/udp # Pearson HTTPS [Pearson] [Pearson] 2008-01-17
 smbdirect        5445/tcp # Server Message Block over Remote Direct Memory Access [Microsoft_Corporation_2] [Tom_Talpey] 2012-03-15
 smbdirect        5445/sctp # Server Message Block over Remote Direct Memory Access [Microsoft_Corporation_2] [Tom_Talpey] 2012-03-15
+tiepie           5450/tcp # TiePie engineering data acquisition [TiePie_engineering] [Reinder_Feenstra] 2016-04-01
+tiepie-disc      5450/udp # TiePie engineering data acquisition (discovery) [TiePie_engineering] [Reinder_Feenstra] 2016-04-01
 surebox          5453/tcp # SureBox [Emin_BORU] [Emin_BORU] 2004-11
 surebox          5453/udp # SureBox [Emin_BORU] [Emin_BORU] 2004-11
 apc-5454         5454/tcp # APC 5454 [American_Power_Conve] [American_Power_Conve]
@@ -9607,6 +9614,8 @@ fodms            7200/tcp # FODMS FLIP [David_Anthony] [David_Anthony]
 fodms            7200/udp # FODMS FLIP [David_Anthony] [David_Anthony]
 dlip             7201/tcp # DLIP [Albert_Manfredi] [Albert_Manfredi]
 dlip             7201/udp # DLIP [Albert_Manfredi] [Albert_Manfredi]
+PS-Server        7215/tcp # Communication ports for PaperStream Server services [PFU_Systems_Inc.] [Hari_Asuri] 2016-02-26
+PS-Capture-Pro   7216/tcp # PaperStream Capture Professional [PFU_Systems_Inc.] [Hari_Asuri] 2016-02-26
 ramp             7227/tcp # Registry A & M Protocol [John_Havard] [John_Havard] 2003-11
 ramp             7227/udp # Registry A $ M Protocol [John_Havard] [John_Havard] 2003-11
 citrixupp        7228/tcp # Citrix Universal Printing Port [Gary_Barton] [Gary_Barton] 2011-02-24
@@ -9727,6 +9736,8 @@ coherence        7574/tcp # Oracle Coherence Cluster Service [Oracle_5] [Mark_Fa
 coherence-disc   7574/udp # Oracle Coherence Cluster discovery service [Oracle_5] [Mark_Falco] 2014-07-09
 sun-lm           7588/tcp # Sun License Manager [Sophie_Deng] [Sophie_Deng]
 sun-lm           7588/udp # Sun License Manager [Sophie_Deng] [Sophie_Deng]
+mipi-debug       7606/tcp # MIPI Alliance Debug [MIPI_Alliance] [Peter_Lefkin] 2016-02-26
+mipi-debug       7606/udp # MIPI Alliance Debug [MIPI_Alliance] [Peter_Lefkin] 2016-02-26
 indi             7624/tcp # Instrument Neutral Distributed Interface [Elwood_Downey] [Elwood_Downey] 2002-04
 indi             7624/udp # Instrument Neutral Distributed Interface [Elwood_Downey] [Elwood_Downey] 2002-04
 simco            7626/tcp # SImple Middlebox COnfiguration (SIMCO) Server [RFC4540]
@@ -11083,6 +11094,8 @@ inovaport6      23005/tcp # Inova LightLink Server Type 6 [Chris_Koeritz_3] [Chr
 inovaport6      23005/udp # Inova LightLink Server Type 6 [Chris_Koeritz_3] [Chris_Koeritz_3] 2006-10
 gntp            23053/tcp # Generic Notification Transport Protocol [Growl_Project] [Chris_Forsythe] 2012-02-07
 s102            23272/udp # S102 application [Kimmo_Kymalainen] [Kimmo_Kymalainen] 2009-08-26
+5afe-dir        23294/tcp # 5AFE SDN Directory [Ayoda_GmbH] [Laurenz_Eschwey] 2016-04-01
+5afe-disc       23294/udp # 5AFE SDN Directory discovery [Ayoda_GmbH] [Laurenz_Eschwey] 2016-04-01
 elxmgmt         23333/tcp # Emulex HBAnyware Remote Management [Maziar_Tamadon] [Maziar_Tamadon] 2007-11-06
 elxmgmt         23333/udp # Emulex HBAnyware Remote Management [Maziar_Tamadon] [Maziar_Tamadon] 2007-11-06
 novar-dbase     23400/tcp # Novar Data [Keith_Kilroy] [Keith_Kilroy] 2006-02

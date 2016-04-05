@@ -23,6 +23,7 @@
 #include <ui_main_window.h>
 
 #include <epan/addr_resolv.h>
+#include "epan/dissector_filters.h"
 #include <epan/epan_dissect.h>
 #include <wsutil/filesystem.h>
 #include <wsutil/ws_version_info.h>
@@ -46,8 +47,13 @@
 #include "ui/preference_utils.h"
 
 #include "byte_view_tab.h"
+#ifdef HAVE_LIBPCAP
+#include "capture_interfaces_dialog.h"
+#endif
+#include "conversation_colorize_action.h"
 #include "display_filter_edit.h"
 #include "export_dissection_dialog.h"
+#include "file_set_dialog.h"
 #include "funnel_statistics.h"
 #include "import_text_dialog.h"
 #include "packet_list.h"
@@ -261,18 +267,20 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     main_ui_(new Ui::MainWindow),
     cur_layout_(QVector<unsigned>()),
-    df_combo_box_(new DisplayFilterCombo()),
+    df_combo_box_(NULL),
     packet_list_(NULL),
     proto_tree_(NULL),
     previous_focus_(NULL),
+    file_set_dialog_(NULL),
     show_hide_actions_(NULL),
     time_display_actions_(NULL),
     time_precision_actions_(NULL),
-    funnel_statistics_(new FunnelStatistics(this, capture_file_)),
+    funnel_statistics_(NULL),
     freeze_focus_(NULL),
     capture_stopping_(false),
     capture_filter_valid_(false),
 #ifdef HAVE_LIBPCAP
+    capture_interfaces_dialog_(NULL),
     info_data_(),
 #endif
 #ifdef _WIN32
@@ -291,6 +299,10 @@ MainWindow::MainWindow(QWidget *parent) :
 #ifdef HAVE_LIBPCAP
     capture_session_init(&cap_session_, CaptureFile::globalCapFile());
 #endif
+
+    // setpUi calls QMetaObject::connectSlotsByName(this). connectSlotsByName
+    // iterates over *all* of our children, looking for matching "on_" slots.
+    // The fewer children we have at this point the better.
     main_ui_->setupUi(this);
     setWindowIcon(wsApp->normalIcon());
     setTitlebarForCaptureFile();
@@ -313,6 +325,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(wsApp, SIGNAL(appInitialized()), this, SLOT(addStatsPluginsToMenu()));
     connect(wsApp, SIGNAL(appInitialized()), this, SLOT(addDynamicMenus()));
     connect(wsApp, SIGNAL(appInitialized()), this, SLOT(addExternalMenus()));
+    connect(wsApp, SIGNAL(appInitialized()), this, SLOT(initConversationMenus()));
 
     connect(wsApp, SIGNAL(profileChanging()), this, SLOT(saveWindowGeometry()));
     connect(wsApp, SIGNAL(preferencesChanged()), this, SLOT(layoutPanes()));
@@ -324,11 +337,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(wsApp, SIGNAL(updateRecentItemStatus(const QString &, qint64, bool)), this, SLOT(updateRecentFiles()));
     updateRecentFiles();
 
-#ifdef HAVE_LIBPCAP
-    connect(&capture_interfaces_dialog_, SIGNAL(startCapture()), this, SLOT(startCapture()));
-    connect(&capture_interfaces_dialog_, SIGNAL(stopCapture()), this, SLOT(stopCapture()));
-#endif
-
+    df_combo_box_ = new DisplayFilterCombo();
     const DisplayFilterEdit *df_edit = dynamic_cast<DisplayFilterEdit *>(df_combo_box_->lineEdit());
     connect(df_edit, SIGNAL(pushFilterSyntaxStatus(const QString&)),
             main_ui_->statusBar, SLOT(pushFilterStatus(const QString&)));
@@ -340,6 +349,7 @@ MainWindow::MainWindow(QWidget *parent) :
             this, SLOT(showPreferencesDialog(PreferencesDialog::PreferencesPane)));
     connect(wsApp, SIGNAL(preferencesChanged()), df_edit, SLOT(checkFilter()));
 
+    funnel_statistics_ = new FunnelStatistics(this, capture_file_);
     connect(df_edit, SIGNAL(textChanged(QString)), funnel_statistics_, SLOT(displayFilterTextChanged(QString)));
     connect(funnel_statistics_, SIGNAL(setDisplayFilter(QString)), df_edit, SLOT(setText(QString)));
     connect(funnel_statistics_, SIGNAL(applyDisplayFilter()), df_combo_box_, SLOT(applyDisplayFilter()));
@@ -349,10 +359,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     initMainToolbarIcons();
 
-    // In Qt4 multiple toolbars and "pretty" are mutually exculsive on OS X. If
-    // unifiedTitleAndToolBarOnMac is enabled everything ends up in the same row.
-    // https://bugreports.qt-project.org/browse/QTBUG-22433
-    // This property is obsolete in Qt5 so this issue may be fixed in that version.
     main_ui_->displayFilterToolBar->insertWidget(main_ui_->actionDisplayFilterExpression, df_combo_box_);
 
     wireless_frame_ = new WirelessFrame(this);
@@ -634,9 +640,6 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(main_ui_->statusBar, SIGNAL(editCaptureComment()),
             this, SLOT(on_actionStatisticsCaptureFileProperties_triggered()));
 
-    connect(&file_set_dialog_, SIGNAL(fileSetOpenCaptureFile(QString)),
-            this, SLOT(openCaptureFile(QString)));
-
 #ifdef HAVE_LIBPCAP
     QTreeWidget *iface_tree = findChild<QTreeWidget *>("interfaceTree");
     if (iface_tree) {
@@ -646,27 +649,12 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(main_ui_->welcomePage, SIGNAL(captureFilterSyntaxChanged(bool)),
             this, SLOT(captureFilterSyntaxChanged(bool)));
 
-#if HAVE_EXTCAP
+#ifdef HAVE_EXTCAP
         connect(this->main_welcome_, SIGNAL(showExtcapOptions(QString&)),
                 this, SLOT(showExtcapOptionsDialog(QString&)));
 #endif
 
-    connect(&capture_interfaces_dialog_, SIGNAL(getPoints(int,PointList*)),
-            this->main_welcome_->getInterfaceTree(), SLOT(getPoints(int,PointList*)));
-    // Changes in interface selections or capture filters should be propagated
-    // to the main welcome screen where they will be applied to the global
-    // capture options.
-    connect(&capture_interfaces_dialog_, SIGNAL(interfaceListChanged()),
-            this->main_welcome_->getInterfaceTree(), SLOT(interfaceListChanged()));
-    connect(&capture_interfaces_dialog_, SIGNAL(interfacesChanged()),
-            this->main_welcome_, SLOT(interfaceSelected()));
-    connect(&capture_interfaces_dialog_, SIGNAL(interfacesChanged()),
-            this->main_welcome_->getInterfaceTree(), SLOT(updateSelectedInterfaces()));
-    connect(&capture_interfaces_dialog_, SIGNAL(interfacesChanged()),
-            this->main_welcome_->getInterfaceTree(), SLOT(updateToolTips()));
-    connect(&capture_interfaces_dialog_, SIGNAL(captureFilterTextEdited(QString)),
-            this->main_welcome_, SLOT(setCaptureFilterText(QString)));
-#endif
+#endif // HAVE_LIBPCAP
 
     /* Create plugin_if hooks */
     plugin_if_register_gui_cb(PLUGIN_IF_FILTER_ACTION_APPLY, plugin_if_mainwindow_apply_filter);
@@ -805,7 +793,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     }
 
 #ifdef HAVE_LIBPCAP
-    capture_interfaces_dialog_.close();
+    if (capture_interfaces_dialog_) capture_interfaces_dialog_->close();
 #endif
     // Make sure we kill any open dumpcap processes.
     delete main_welcome_;
@@ -1012,26 +1000,6 @@ void MainWindow::mergeCaptureFile()
         cf_status_t  merge_status;
         char        *in_filenames[2];
         char        *tmpname;
-
-        switch (prefs.gui_fileopen_style) {
-
-        case FO_STYLE_LAST_OPENED:
-            /* The user has specified that we should start out in the last directory
-           we looked in.  If we've already opened a file, use its containing
-           directory, if we could determine it, as the directory, otherwise
-           use the "last opened" directory saved in the preferences file if
-           there was one. */
-            /* This is now the default behaviour in file_selection_new() */
-            break;
-
-        case FO_STYLE_SPECIFIED:
-            /* The user has specified that we should always start out in a
-           specified directory; if they've specified that directory,
-           start out by showing the files in that dir. */
-            if (prefs.gui_fileopen_dir[0] != '\0')
-                merge_dlg.setDirectory(prefs.gui_fileopen_dir);
-            break;
-        }
 
         if (merge_dlg.merge(file_name)) {
             gchar *err_msg;
@@ -1257,26 +1225,6 @@ void MainWindow::saveAsCaptureFile(capture_file *cf, bool must_support_comments,
     for (;;) {
         CaptureFileDialog save_as_dlg(this, cf);
 
-        switch (prefs.gui_fileopen_style) {
-
-        case FO_STYLE_LAST_OPENED:
-            /* The user has specified that we should start out in the last directory
-               we looked in.  If we've already opened a file, use its containing
-               directory, if we could determine it, as the directory, otherwise
-               use the "last opened" directory saved in the preferences file if
-               there was one. */
-            /* This is now the default behaviour in file_selection_new() */
-            break;
-
-        case FO_STYLE_SPECIFIED:
-            /* The user has specified that we should always start out in a
-               specified directory; if they've specified that directory,
-               start out by showing the files in that dir. */
-            if (prefs.gui_fileopen_dir[0] != '\0')
-                save_as_dlg.setDirectory(prefs.gui_fileopen_dir);
-            break;
-        }
-
         /* If the file has comments, does the format the user selected
            support them?  If not, ask the user whether they want to
            discard the comments or choose a different format. */
@@ -1376,26 +1324,6 @@ void MainWindow::exportSelectedPackets() {
 
     for (;;) {
         CaptureFileDialog esp_dlg(this, capture_file_.capFile());
-
-        switch (prefs.gui_fileopen_style) {
-
-        case FO_STYLE_LAST_OPENED:
-            /* The user has specified that we should start out in the last directory
-               we looked in.  If we've already opened a file, use its containing
-               directory, if we could determine it, as the directory, otherwise
-               use the "last opened" directory saved in the preferences file if
-               there was one. */
-            /* This is now the default behaviour in file_selection_new() */
-            break;
-
-        case FO_STYLE_SPECIFIED:
-            /* The user has specified that we should always start out in a
-               specified directory; if they've specified that directory,
-               start out by showing the files in that dir. */
-            if (prefs.gui_fileopen_dir[0] != '\0')
-                esp_dlg.setDirectory(prefs.gui_fileopen_dir);
-            break;
-        }
 
         /* If the file has comments, does the format the user selected
            support them?  If not, ask the user whether they want to
@@ -1876,6 +1804,72 @@ void MainWindow::initFreezeActions()
     foreach (QAction *action, freeze_actions) {
         freeze_actions_ << QPair<QAction *, bool>(action, false);
     }
+}
+
+void MainWindow::initConversationMenus()
+{
+    int i;
+
+    QList<QAction *> cc_actions = QList<QAction *>()
+            << main_ui_->actionViewColorizeConversation1 << main_ui_->actionViewColorizeConversation2
+            << main_ui_->actionViewColorizeConversation3 << main_ui_->actionViewColorizeConversation4
+            << main_ui_->actionViewColorizeConversation5 << main_ui_->actionViewColorizeConversation6
+            << main_ui_->actionViewColorizeConversation7 << main_ui_->actionViewColorizeConversation8
+            << main_ui_->actionViewColorizeConversation9 << main_ui_->actionViewColorizeConversation10;
+
+    for (GList *conv_filter_list_entry = conv_filter_list; conv_filter_list_entry; conv_filter_list_entry = g_list_next(conv_filter_list_entry)) {
+        // Main menu items
+        conversation_filter_t* conv_filter = (conversation_filter_t *)conv_filter_list_entry->data;
+        ConversationAction *conv_action = new ConversationAction(main_ui_->menuConversationFilter, conv_filter);
+        main_ui_->menuConversationFilter->addAction(conv_action);
+
+        connect(this, SIGNAL(packetInfoChanged(_packet_info*)), conv_action, SLOT(setPacketInfo(_packet_info*)));
+        connect(conv_action, SIGNAL(triggered()), this, SLOT(applyConversationFilter()));
+
+        // Packet list context menu items
+        packet_list_->conversationMenu()->addAction(conv_action);
+
+        QMenu *submenu = packet_list_->colorizeMenu()->addMenu(conv_action->text());
+        i = 1;
+
+        foreach (QAction *cc_action, cc_actions) {
+            conv_action = new ConversationAction(submenu, conv_filter);
+            conv_action->setText(cc_action->text());
+            conv_action->setIcon(cc_action->icon());
+            conv_action->setColorNumber(i++);
+            submenu->addAction(conv_action);
+            connect(this, SIGNAL(packetInfoChanged(_packet_info*)), conv_action, SLOT(setPacketInfo(_packet_info*)));
+            connect(conv_action, SIGNAL(triggered()), this, SLOT(colorizeWithFilter()));
+        }
+
+        conv_action = new ConversationAction(submenu, conv_filter);
+        conv_action->setText(main_ui_->actionViewColorizeNewColoringRule->text());
+        submenu->addAction(conv_action);
+        connect(this, SIGNAL(packetInfoChanged(_packet_info*)), conv_action, SLOT(setPacketInfo(_packet_info*)));
+        connect(conv_action, SIGNAL(triggered()), this, SLOT(colorizeWithFilter()));
+
+        // Proto tree conversation menu is filled in in ProtoTree::contextMenuEvent.
+        // We should probably do that here.
+    }
+
+    // Proto tree colorization items
+    i = 1;
+    ColorizeAction *colorize_action;
+    foreach (QAction *cc_action, cc_actions) {
+        colorize_action = new ColorizeAction(proto_tree_->colorizeMenu());
+        colorize_action->setText(cc_action->text());
+        colorize_action->setIcon(cc_action->icon());
+        colorize_action->setColorNumber(i++);
+        proto_tree_->colorizeMenu()->addAction(colorize_action);
+        connect(this, SIGNAL(fieldFilterChanged(QByteArray)), colorize_action, SLOT(setFieldFilter(QByteArray)));
+        connect(colorize_action, SIGNAL(triggered()), this, SLOT(colorizeWithFilter()));
+    }
+
+    colorize_action = new ColorizeAction(proto_tree_->colorizeMenu());
+    colorize_action->setText(main_ui_->actionViewColorizeNewColoringRule->text());
+    proto_tree_->colorizeMenu()->addAction(colorize_action);
+    connect(this, SIGNAL(fieldFilterChanged(QByteArray)), colorize_action, SLOT(setFieldFilter(QByteArray)));
+    connect(colorize_action, SIGNAL(triggered()), this, SLOT(colorizeWithFilter()));
 }
 
 // Titlebar

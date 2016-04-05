@@ -41,7 +41,7 @@
 #include "packet-tcp.h"
 #include "packet-ssl.h"
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 #define ZLIB_CONST
 #include <zlib.h>
 #endif
@@ -58,7 +58,7 @@ void proto_reg_handoff_spdy(void);
  * entities and for decompressing request & reply header blocks.
  */
 typedef struct _spdy_conv_t {
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
   z_streamp rqst_decompressor;
   z_streamp rply_decompressor;
   uLong     dictionary_id;
@@ -238,7 +238,6 @@ static expert_field ei_spdy_invalid_go_away = EI_INIT;
 static expert_field ei_spdy_invalid_frame_type = EI_INIT;
 static expert_field ei_spdy_reassembly_info = EI_INIT;
 
-static dissector_handle_t data_handle;
 static dissector_handle_t media_handle;
 static dissector_handle_t spdy_handle;
 static dissector_table_t media_type_subdissector_table;
@@ -249,7 +248,7 @@ static gboolean spdy_assemble_entity_bodies = TRUE;
 /*
  * Decompression of zlib encoded entities.
  */
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 static gboolean spdy_decompress_body = TRUE;
 static gboolean spdy_decompress_headers = TRUE;
 #else
@@ -438,7 +437,7 @@ static const char spdy_dictionary[] = {
   0x2c, 0x65, 0x6e, 0x71, 0x3d, 0x30, 0x2e         /* - e n q - 0 -   */
 };
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 /* callback function used at the end of file-scope to cleanup zlib's inflate
  * streams to avoid memory leaks.
  * XXX: can we be more aggressive and call this sooner for finished streams?
@@ -468,7 +467,7 @@ spdy_init_protocol(void)
 static spdy_conv_t * get_or_create_spdy_conversation_data(packet_info *pinfo) {
   conversation_t  *conversation;
   spdy_conv_t *conv_data;
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
   int retcode;
 #endif
 
@@ -482,7 +481,7 @@ static spdy_conv_t * get_or_create_spdy_conversation_data(packet_info *pinfo) {
 
     conv_data->streams = NULL;
     if (spdy_decompress_headers) {
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
       conv_data->rqst_decompressor = wmem_new0(wmem_file_scope(), z_stream);
       conv_data->rply_decompressor = wmem_new0(wmem_file_scope(), z_stream);
       retcode = inflateInit(conv_data->rqst_decompressor);
@@ -873,7 +872,7 @@ static int dissect_spdy_data_payload(tvbuff_t *tvb,
         if (spdy_decompress_body) {
           proto_item_append_text(e_ti, " [Error: Decompression failed]");
         }
-        call_dissector(data_handle, data_tvb, pinfo, e_tree);
+        call_data_dissector(data_tvb, pinfo, e_tree);
 
         goto body_dissected;
       }
@@ -929,7 +928,7 @@ static int dissect_spdy_data_payload(tvbuff_t *tvb,
       call_dissector_with_data(media_handle, next_tvb, pinfo, spdy_tree, media_str);
     } else {
       /* Call the default data dissector */
-      call_dissector(data_handle, next_tvb, pinfo, spdy_tree);
+      call_data_dissector(next_tvb, pinfo, spdy_tree);
     }
 
 body_dissected:
@@ -943,7 +942,7 @@ body_dissected:
   return frame->length;
 }
 
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
 /*
  * Performs header decompression.
  *
@@ -1154,7 +1153,7 @@ static int dissect_spdy_header_payload(
     if (header_info == NULL) {
       guint8 *uncomp_ptr = NULL;
       guint uncomp_length = 0;
-#ifdef HAVE_LIBZ
+#ifdef HAVE_ZLIB
       z_streamp decomp;
 
       /* Get our decompressor. */
@@ -1946,8 +1945,7 @@ void proto_reg_handoff_spdy(void) {
   /* Use "0" to avoid overwriting HTTPS port and still offer support over SSL */
   ssl_dissector_add(0, spdy_handle);
 
-  data_handle = find_dissector("data");
-  media_handle = find_dissector("media");
+  media_handle = find_dissector_add_dependency("media", proto_spdy);
   port_subdissector_table = find_dissector_table("http.port");
   media_type_subdissector_table = find_dissector_table("media_type");
 

@@ -22,8 +22,6 @@
 include Makefile.common
 include $(top_srcdir)/Makefile.am.inc
 
-ACLOCAL_AMFLAGS = `../aclocal-flags`
-
 AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) -DWS_BUILD_DLL $(GLIB_CFLAGS)
 
 noinst_LTLIBRARIES = libwiretap_generated.la
@@ -55,11 +53,15 @@ libwiretap_generated_la_SOURCES = \
 
 libwiretap_generated_la_CFLAGS = $(GENERATED_CFLAGS)
 
+BUILT_SOURCES = $(GENERATED_HEADER_FILES)
+
 EXTRA_DIST = \
+	.editorconfig		\
 	README.airmagnet	\
 	README.developer	\
 	Makefile.common		\
 	Makefile.nmake		\
+	CMakeLists.txt		\
 	$(GENERATOR_FILES) 	\
 	$(GENERATED_FILES)
 
@@ -71,11 +73,9 @@ k12text_lex.h : k12text.c
 
 ascend_scanner_lex.h : ascend_scanner.c
 
-ascend_scanner.c: ascend.h
-
 ascend.h: ascend.c
 
-ascend.c: ascend.y
+ascend.c: $(srcdir)/ascend.y ascend_scanner_lex.h
 	@if [ -z "$(YACC)" ]; then \
 		echo "Neither bison nor byacc has been found"; \
 		exit 1; \

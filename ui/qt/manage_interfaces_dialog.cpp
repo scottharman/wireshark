@@ -84,10 +84,11 @@ enum {
 };
 
 ManageInterfacesDialog::ManageInterfacesDialog(QWidget *parent) :
-    QDialog(parent),
+    GeometryStateDialog(parent),
     ui(new Ui::ManageInterfacesDialog)
 {
     ui->setupUi(this);
+    loadGeometry();
 
 #ifdef Q_OS_MAC
     ui->addPipe->setAttribute(Qt::WA_MacSmallSize, true);
@@ -517,7 +518,6 @@ void ManageInterfacesDialog::addRemoteInterfaces(GList* rlist, remote_options *r
             continue;
         }
         ip_str = g_string_new("");
-        str = "";
         ips = 0;
         memset(&device, 0, sizeof(device));
         device.name = g_strdup(if_info->name);

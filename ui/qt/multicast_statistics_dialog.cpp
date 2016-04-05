@@ -169,9 +169,7 @@ MulticastStatisticsDialog::MulticastStatisticsDialog(QWidget &parent, CaptureFil
     TapParameterDialog(parent, cf)
 {
     setWindowSubtitle(tr("UDP Multicast Streams"));
-
-    // XXX Use recent settings instead
-    resize(parent.width() * 4 / 5, parent.height() * 3 / 4);
+    loadGeometry(parent.width() * 4 / 5, parent.height() * 3 / 4, "MulticastStatisticsDialog");
 
     tapinfo_ = new mcaststream_tapinfo_t();
     tapinfo_->user_data = this;
@@ -407,7 +405,7 @@ void MulticastStatisticsDialog::updateMulticastParameters()
 
     param = buffer_alarm_threshold_le_->text().toInt(&ok);
     if (ok && param > 0) {
-        mcast_stream_trigger = param;
+        mcast_stream_bufferalarm = param;
     }
 
     param = stream_empty_speed_le_->text().toInt(&ok);

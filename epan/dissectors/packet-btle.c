@@ -316,6 +316,7 @@ dissect_btle(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
     tvbuff_t              *next_tvb;
     guint8                *dst_bd_addr;
     guint8                *src_bd_addr;
+    const guint8           broadcast_addr[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     connection_address_t  *connection_address = NULL;
     wmem_tree_t           *wmem_tree;
     wmem_tree_key_t        key[5];
@@ -450,7 +451,7 @@ dissect_btle(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             copy_address_shallow(&pinfo->dl_src, &pinfo->net_src);
             copy_address_shallow(&pinfo->src, &pinfo->net_src);
 
-            set_address(&pinfo->net_dst, AT_STRINGZ, 10, "broadcast");
+            set_address(&pinfo->net_dst, AT_ETHER, 6, broadcast_addr);
             copy_address_shallow(&pinfo->dl_dst, &pinfo->net_dst);
             copy_address_shallow(&pinfo->dst, &pinfo->net_dst);
 
@@ -534,7 +535,7 @@ dissect_btle(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
             copy_address_shallow(&pinfo->dl_src, &pinfo->net_src);
             copy_address_shallow(&pinfo->src, &pinfo->net_src);
 
-            set_address(&pinfo->net_dst, AT_STRINGZ, 10, "broadcast");
+            set_address(&pinfo->net_dst, AT_ETHER, 6, broadcast_addr);
             copy_address_shallow(&pinfo->dl_dst, &pinfo->net_dst);
             copy_address_shallow(&pinfo->dst, &pinfo->net_dst);
 
@@ -1397,9 +1398,9 @@ proto_register_btle(void)
 void
 proto_reg_handoff_btle(void)
 {
-    btcommon_ad_handle = find_dissector("btcommon.eir_ad.ad");
-    btcommon_le_channel_map_handle = find_dissector("btcommon.le_channel_map");
-    btl2cap_handle = find_dissector("btl2cap");
+    btcommon_ad_handle = find_dissector_add_dependency("btcommon.eir_ad.ad", proto_btle);
+    btcommon_le_channel_map_handle = find_dissector_add_dependency("btcommon.le_channel_map", proto_btle);
+    btl2cap_handle = find_dissector_add_dependency("btl2cap", proto_btle);
 
     proto_btle_rf = proto_get_id_by_filter_name("btle_rf");
 

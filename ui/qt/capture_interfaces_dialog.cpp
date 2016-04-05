@@ -113,10 +113,11 @@ public:
 };
 
 CaptureInterfacesDialog::CaptureInterfacesDialog(QWidget *parent) :
-    QDialog(parent),
+    GeometryStateDialog(parent),
     ui(new Ui::CaptureInterfacesDialog)
 {
     ui->setupUi(this);
+    loadGeometry();
     setWindowTitle(wsApp->windowTitleString(tr("Capture Interfaces")));
 
     stat_timer_ = NULL;
@@ -193,8 +194,10 @@ void CaptureInterfacesDialog::filterEdited()
         ti->setText(col_filter_, ui->captureFilterComboBox->lineEdit()->text());
     }
 
-    QModelIndex col_filter_idx = ui->interfaceTree->model()->index(ui->interfaceTree->indexOfTopLevelItem(si[0]), col_filter_);
-    ui->interfaceTree->scrollTo(col_filter_idx);
+    if (si.count() > 0) {
+        QModelIndex col_filter_idx = ui->interfaceTree->model()->index(ui->interfaceTree->indexOfTopLevelItem(si[0]), col_filter_);
+        ui->interfaceTree->scrollTo(col_filter_idx);
+    }
 }
 
 void CaptureInterfacesDialog::updateWidgets()

@@ -28,6 +28,8 @@ AM_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) -DDOC_DIR=\"$(docdir)\" \
 
 noinst_LIBRARIES = libui.a libui_dirty.a
 
+BUILT_SOURCES = $(GENERATED_HEADER_FILES)
+
 CLEANFILES = \
 	doxygen-ui.tag	\
 	libui.a		\
@@ -79,8 +81,10 @@ checkapi-todo:
 	$(WIRESHARK_UI_SRC)
 
 EXTRA_DIST = \
+	.editorconfig			\
 	$(GENERATOR_FILES)		\
 	CMakeLists.txt			\
 	doxygen.cfg.in			\
 	Makefile.common			\
-	Makefile.nmake
+	Makefile.nmake			\
+	win32

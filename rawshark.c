@@ -61,7 +61,6 @@
 #include <wsutil/plugins.h>
 #include <wsutil/privileges.h>
 #include <wsutil/report_err.h>
-#include <wsutil/ws_diag_control.h>
 
 #include "globals.h"
 #include <epan/packet.h>
@@ -189,7 +188,7 @@ print_usage(FILE *output)
     fprintf(output, "                           packet encapsulation or protocol\n");
     fprintf(output, "  -F <field>               field to display\n");
     fprintf(output, "  -n                       disable all name resolution (def: all enabled)\n");
-    fprintf(output, "  -N <name resolve flags>  enable specific name resolution(s): \"mnNtCd\"\n");
+    fprintf(output, "  -N <name resolve flags>  enable specific name resolution(s): \"mnNtd\"\n");
     fprintf(output, "  -p                       use the system's packet header format\n");
     fprintf(output, "                           (which may have 64-bit timestamps)\n");
     fprintf(output, "  -R <read filter>         packet filter in Wireshark display filter syntax\n");
@@ -629,7 +628,7 @@ main(int argc, char *argv[])
             case 'N':        /* Select what types of addresses/port #s to resolve */
                 badopt = string_to_name_resolve(optarg, &gbl_resolv_flags);
                 if (badopt != '\0') {
-                    cmdarg_err("-N specifies unknown resolving option '%c'; valid options are 'C', 'd', m', 'n', 'N', and 't'",
+                    cmdarg_err("-N specifies unknown resolving option '%c'; valid options are 'd', m', 'n', 'N', and 't'",
                                badopt);
                     exit(1);
                 }
@@ -1313,9 +1312,9 @@ static gboolean print_field_value(field_info *finfo, int cmd_line_index)
                     case SF_STRVAL:
                         switch(hfinfo->type) {
                             case FT_BOOLEAN:
-                                uvalue = fvalue_get_uinteger(&finfo->value);
+                                uvalue64 = fvalue_get_uinteger64(&finfo->value);
                                 tfstring = (const struct true_false_string*) hfinfo->strings;
-                                g_string_append(label_s, uvalue ? tfstring->true_string : tfstring->false_string);
+                                g_string_append(label_s, uvalue64 ? tfstring->true_string : tfstring->false_string);
                                 break;
                             case FT_INT8:
                             case FT_INT16:

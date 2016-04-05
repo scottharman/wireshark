@@ -3667,7 +3667,7 @@ dissect_amqp_0_10_connection(tvbuff_t *tvb,
                                      hf_amqp_0_10_method_connection_open_capabilities,
                                      tvb,
                                      offset,
-                                     arg_length, ENC_NA);
+                                     arg_length, ENC_ASCII|ENC_NA);
             dissect_amqp_0_10_array (tvb,
                                      pinfo,
                                      offset,
@@ -8363,7 +8363,7 @@ dissect_amqp_0_9_method_connection_close_ok(tvbuff_t *tvb _U_,
 
 static int
 dissect_amqp_0_9_method_connection_blocked(tvbuff_t *tvb,
-    int offset, proto_tree *args_tree _U_)
+    int offset, proto_tree *args_tree)
 {
     /*  reason (shortstr)  */
     proto_tree_add_item(args_tree, hf_amqp_method_connection_blocked_reason,
@@ -9507,7 +9507,7 @@ dissect_amqp_0_9_method_file_qos(tvbuff_t *tvb,
 
 static int
 dissect_amqp_0_9_method_file_qos_ok(tvbuff_t *tvb _U_,
-    int offset _U_, proto_tree *args_tree _U_)
+    int offset, proto_tree *args_tree _U_)
 {
     return offset;
 }
@@ -10127,8 +10127,8 @@ dissect_amqp_0_9_method_tunnel_request(tvbuff_t *tvb, packet_info *pinfo,
 /*  Dissection routine for method Confirm.Select                          */
 
 static int
-dissect_amqp_0_9_method_confirm_select(tvbuff_t *tvb _U_,
-    int offset, proto_tree *args_tree _U_)
+dissect_amqp_0_9_method_confirm_select(tvbuff_t *tvb,
+    int offset, proto_tree *args_tree)
 {
     /*  nowait (bit)             */
     proto_tree_add_item(args_tree, hf_amqp_method_confirm_select_nowait,
@@ -11045,7 +11045,7 @@ dissect_amqp_1_0_false(tvbuff_t *tvb, packet_info *pinfo _U_,
 static int
 format_amqp_1_0_null(tvbuff_t *tvb _U_,
                       guint offset _U_, guint bound _U_, guint length _U_,
-                      const char **value _U_)
+                      const char **value)
 {
     *value = "(null)";
     return 0;
@@ -11200,7 +11200,7 @@ format_amqp_1_0_uuid(tvbuff_t *tvb,
 
 static int
 format_amqp_1_0_bin(tvbuff_t *tvb,
-                    guint offset, guint bound _U_, guint length,
+                    guint offset, guint bound, guint length,
                     const char **value)
 {
     guint bin_length;
@@ -11929,19 +11929,19 @@ proto_register_amqp(void)
             FT_BYTES, BASE_NONE, NULL, 0,
             "SASL outcome additional data", HFILL}},
         {&hf_amqp_1_0_outgoingLocales_sym, {
-            "Outgoing-Locales", "amqp.performative.arguments.outgoingLocales",
+            "Outgoing-Locales", "amqp.performative.arguments.outgoingLocales_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_1_0_incomingLocales_sym, {
-            "Incoming-Locales", "amqp.performative.arguments.incomingLocales",
+            "Incoming-Locales", "amqp.performative.arguments.incomingLocales_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_1_0_offeredCapabilities_sym, {
-            "Offered-Capabilities", "amqp.arguments.offeredCapabilities",
+            "Offered-Capabilities", "amqp.arguments.offeredCapabilities_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_1_0_desiredCapabilities_sym, {
-            "Desired-Capabilities", "amqp.performative.arguments.desiredCapabilities",
+            "Desired-Capabilities", "amqp.performative.arguments.desiredCapabilities_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_1_0_address_str, {
@@ -11957,11 +11957,11 @@ proto_register_amqp(void)
             FT_STRING, BASE_NONE, NULL, 0,
             "Target for messages", HFILL}},
         {&hf_amqp_1_0_outcomes_sym, {
-            "Outcomes", "amqp.properties.outcomes",
+            "Outcomes", "amqp.properties.outcomes_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             "Outcomes descriptors for the link", HFILL}},
         {&hf_amqp_1_0_capabilities_sym, {
-            "Capabilities", "amqp.properties.capabilities",
+            "Capabilities", "amqp.properties.capabilities_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             "Extension capabilities of the sender", HFILL}},
         {&hf_amqp_1_0_messageId_uint, {
@@ -12005,7 +12005,7 @@ proto_register_amqp(void)
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_1_0_mechanisms_sym, {
-            "Mechanisms", "amqp.sasl.mechanisms",
+            "Mechanisms", "amqp.sasl.mechanisms_sym",
             FT_STRING, BASE_NONE, NULL, 0,
             "Supported security mechanisms", HFILL}},
         {&hf_amqp_0_10_format, {
@@ -12846,7 +12846,7 @@ proto_register_amqp(void)
             NULL, HFILL}},
         {&hf_amqp_0_10_method_connection_start_mechanisms, {
             "Mechanisms", "amqp.method.arguments.mechanisms",
-            FT_NONE, BASE_NONE, NULL, 0,
+            FT_BYTES, BASE_NONE, NULL, 0,
             "Supported security mechanisms", HFILL}},
         {&hf_amqp_0_9_method_connection_start_locales, {
             "Locales", "amqp.method.arguments.locales",
@@ -12854,7 +12854,7 @@ proto_register_amqp(void)
             NULL, HFILL}},
         {&hf_amqp_0_10_method_connection_start_locales, {
             "Locales", "amqp.method.arguments.locales",
-            FT_NONE, BASE_NONE, NULL, 0,
+            FT_BYTES, BASE_NONE, NULL, 0,
             "Supported message locales", HFILL}},
         {&hf_amqp_method_connection_start_ok_client_properties, {
             "Client-Properties", "amqp.method.arguments.client_properties",
@@ -12930,7 +12930,7 @@ proto_register_amqp(void)
             NULL, HFILL}},
         {&hf_amqp_0_10_method_connection_open_capabilities, {
             "Capabilities", "amqp.method.arguments.capabilities",
-            FT_NONE, BASE_NONE, NULL, 0,
+            FT_STRING, BASE_NONE, NULL, 0,
             "Required capabilities", HFILL}},
         {&hf_amqp_0_9_method_connection_open_insist, {
             "Insist", "amqp.method.arguments.insist",
@@ -12945,8 +12945,8 @@ proto_register_amqp(void)
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_0_10_method_connection_open_ok_known_hosts, {
-            "Known-Hosts", "amqp.method.arguments.known_hosts",
-            FT_NONE, BASE_NONE, NULL, 0,
+            "Known-Hosts", "amqp.method.arguments.known_hosts_bytes",
+            FT_BYTES, BASE_NONE, NULL, 0,
             "Equivalent or alternate hosts for reconnection", HFILL}},
         {&hf_amqp_method_connection_redirect_host, {
             "Host", "amqp.method.arguments.host",
@@ -12957,8 +12957,8 @@ proto_register_amqp(void)
             FT_STRING, BASE_NONE, NULL, 0,
             NULL, HFILL}},
         {&hf_amqp_0_10_method_connection_redirect_known_hosts, {
-            "Known-Hosts", "amqp.method.arguments.known_hosts",
-            FT_NONE, BASE_NONE, NULL, 0,
+            "Known-Hosts", "amqp.method.arguments.known_hosts_bytes",
+            FT_BYTES, BASE_NONE, NULL, 0,
             "Equivalent or alternate hosts to redirect to", HFILL}},
         {&hf_amqp_0_9_method_connection_close_reply_code, {
             "Reply-Code", "amqp.method.arguments.reply_code",

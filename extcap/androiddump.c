@@ -95,9 +95,9 @@
 #define INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET         "android-bluetooth-btsnoop-net"
 #define INTERFACE_ANDROID_WIFI_TCPDUMP                  "android-wifi-tcpdump"
 
-#define ANDROIDDUMP_VERSION_MAJOR    1U
-#define ANDROIDDUMP_VERSION_MINOR    0U
-#define ANDROIDDUMP_VERSION_RELEASE  1U
+#define ANDROIDDUMP_VERSION_MAJOR    "1"
+#define ANDROIDDUMP_VERSION_MINOR    "0"
+#define ANDROIDDUMP_VERSION_RELEASE  "2"
 
 #define SERIAL_NUMER_LENGTH_MAX  512
 
@@ -229,6 +229,12 @@ static struct extcap_dumper extcap_dumper_open(char *fifo, int encap) {
 #else
     int err = 0;
 
+    init_open_routines();
+#ifdef HAVE_PLUGINS
+    wtap_register_plugin_types();
+    register_all_wiretap_modules();
+#endif
+
     if (encap == EXTCAP_ENCAP_BLUETOOTH_H4_WITH_PHDR)
         encap_ext = WTAP_ENCAP_BLUETOOTH_H4_WITH_PHDR;
     else if (encap == EXTCAP_ENCAP_WIRESHARK_UPPER_PDU)
@@ -357,7 +363,7 @@ static socket_handle_t adb_connect(const char *server_ip, unsigned short *server
             return INVALID_SOCKET;
         }
 #else
-    errmsg_print("ERROR: Cannot connect to ADB: <%s> Please check that adb daemon is running.", strerror(errno));
+    verbose_print("Cannot connect to ADB: <%s> Please check that adb daemon is running.\n", strerror(errno));
     closesocket(sock);
     return INVALID_SOCKET;
 #endif
@@ -379,7 +385,7 @@ static socket_handle_t adb_connect(const char *server_ip, unsigned short *server
             return INVALID_SOCKET;
         }
 
-        errmsg_print("VERBOSE: Client port %u", GUINT16_FROM_BE(client.sin_port));
+        verbose_print("VERBOSE: Client port %u\n", GUINT16_FROM_BE(client.sin_port));
     }
 
     return sock;
@@ -407,7 +413,15 @@ static char *adb_send_and_receive(socket_handle_t sock, const char *adb_service,
 
     used_buffer_length = 0;
     while (used_buffer_length < 8) {
-        used_buffer_length += recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
+        result = recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
+
+        if (result <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+
+            return 0;
+        }
+
+        used_buffer_length += result;
     }
 
     memcpy(status, buffer, 4);
@@ -417,7 +431,15 @@ static char *adb_send_and_receive(socket_handle_t sock, const char *adb_service,
     buffer[8] = tmp_buffer;
 
     while (used_buffer_length < length + 8) {
-        used_buffer_length += recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
+        result = recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
+
+        if (result <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+
+            return 0;
+        }
+
+        used_buffer_length += result;
     }
 
     if (data_length)
@@ -453,15 +475,31 @@ static char *adb_send_and_read(socket_handle_t sock, const char *adb_service, ch
 
     used_buffer_length = 0;
     while (used_buffer_length < 4) {
-        used_buffer_length += recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
+        result = recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
+
+        if (result <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+
+            return 0;
+        }
+
+        used_buffer_length += result;
     }
 
     memcpy(status, buffer, 4);
 
     while (result > 0) {
         result= recv(sock, buffer + used_buffer_length,  (int)(buffer_length - used_buffer_length), 0);
-        if (result > 0)
-            used_buffer_length += result;
+
+        if (result < 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+
+            return 0;
+        } else if (result == 0) {
+            break;
+        }
+
+        used_buffer_length += result;
     }
 
     if (data_length)
@@ -494,26 +532,54 @@ static int adb_send(socket_handle_t sock, const char *adb_service) {
 
     used_buffer_length = 0;
     while (used_buffer_length < 4) {
-        used_buffer_length += recv(sock, buffer + used_buffer_length,  (int)(sizeof(buffer) - used_buffer_length), 0);
+        result = recv(sock, buffer + used_buffer_length,  (int)(sizeof(buffer) - used_buffer_length), 0);
+
+        if (result <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+
+            return 2;
+        }
+
+        used_buffer_length += result;
     }
 
     if (memcmp(buffer, "OKAY", 4)) {
         errmsg_print("ERROR: Error while receiving by ADB for <%s>", adb_service);
-        return 2;
+
+        return 3;
     }
 
     return 0;
 }
 
-static void new_interface(const gchar *interface_id,
+static void new_interface(extcap_parameters * extcap_conf, const gchar *interface_id,
         const gchar *serial_number, const gchar *display_name)
 {
-    printf("interface {display=%s %s}{value=%s-%s}\n",
-            display_name, serial_number, interface_id, serial_number);
+    char * interface = g_strdup_printf("%s-%s", interface_id, serial_number);
+    char * ifdisplay = g_strdup_printf("%s %s", display_name, serial_number);
+
+    if (is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_HCIDUMP) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_EXTERNAL_PARSER) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET)) {
+
+        extcap_base_register_interface_ext(extcap_conf, interface, ifdisplay, 99, "BluetoothH4", "Bluetooth HCI UART transport layer plus pseudo-header" );
+    } else if (is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_MAIN) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_SYSTEM) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_RADIO) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_EVENTS) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_MAIN) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_SYSTEM) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_RADIO) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_EVENTS) ||
+            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_CRASH)) {
+        extcap_base_register_interface(extcap_conf, interface, ifdisplay, 252, "Upper PDU" );
+    } else if (is_specified_interface(interface, INTERFACE_ANDROID_WIFI_TCPDUMP)) {
+        extcap_base_register_interface(extcap_conf, interface, ifdisplay, 1, "Ethernet");
+    }
 }
 
 
-static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server_tcp_port) {
+static int register_interfaces(extcap_parameters * extcap_conf, const char *adb_server_ip, unsigned short *adb_server_tcp_port) {
     static char            packet[PACKET_LENGTH];
     static char            helpful_packet[PACKET_LENGTH];
     char                  *response;
@@ -537,9 +603,6 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
     int                    api_level;
     int                    disable_interface;
 
-    /* This is done here, so that androiddump get's listed in the about dialog */
-    printf ( "extcap {version=%u.%u.%u}\n", ANDROIDDUMP_VERSION_MAJOR, ANDROIDDUMP_VERSION_MINOR, ANDROIDDUMP_VERSION_RELEASE );
-
 /* NOTE: It seems that "adb devices" and "adb shell" closed connection
          so cannot send next command after them, there is need to reconnect */
 
@@ -550,6 +613,12 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
     device_list = adb_send_and_receive(sock, adb_devices, packet, sizeof(packet), &device_length);
     closesocket(sock);
 
+    if (!device_list) {
+        errmsg_print("ERROR: Cannot get list of interfaces from devices");
+
+        return -2;
+    }
+
     device_list[device_length] = '\0';
     pos = (char *) device_list;
 
@@ -559,12 +628,14 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
         result = (int) (pos - prev_pos);
         pos = strchr(pos, '\n') + 1;
         if (result >= (int) sizeof(serial_number)) {
-            errmsg_print("WARNING: Serial number too long, ignore device");
+            verbose_print("WARNING: Serial number too long, ignore device\n");
             continue;
         }
         memcpy(serial_number, prev_pos, result);
         serial_number[result] = '\0';
         serial_number_length = strlen(serial_number);
+
+        verbose_print("VERBOSE: Processing device: \"%s\"\n" , serial_number);
 
         /* Check for the presence of tcpdump in the android device. */
 
@@ -574,48 +645,58 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
         sprintf((char *) helpful_packet, adb_transport_serial_templace, 15 + serial_number_length, serial_number);
         result = adb_send(sock, helpful_packet);
         if (result) {
-            errmsg_print("ERROR: Error while setting adb transport for <%s>", helpful_packet);
+            verbose_print("WARNING: Error while setting adb transport for <%s>\n", helpful_packet);
             closesocket(sock);
-            return 1;
-        }
-        response = adb_send_and_read(sock, adb_tcpdump_help, helpful_packet, sizeof(helpful_packet), &data_length);
-        closesocket(sock);
-        response[data_length] = '\0';
+        } else {
+            response = adb_send_and_read(sock, adb_tcpdump_help, helpful_packet, sizeof(helpful_packet), &data_length);
+            closesocket(sock);
 
-        /* If tcpdump is found in the android device, add Android Wifi Tcpdump as an interface  */
-        if (strstr(response,"tcpdump version")) {
-            new_interface(INTERFACE_ANDROID_WIFI_TCPDUMP, serial_number, "Android WiFi");
+            if (response) {
+                response[data_length] = '\0';
+
+                /* If tcpdump is found in the android device, add Android Wifi Tcpdump as an interface  */
+                if (strstr(response,"tcpdump version")) {
+                    new_interface(extcap_conf, INTERFACE_ANDROID_WIFI_TCPDUMP, serial_number, "Android WiFi");
+                }
+            } else {
+                verbose_print("WARNING: Error on socket: <%s>\n", helpful_packet);
+            }
         }
 
         sock = adb_connect(adb_server_ip, adb_server_tcp_port);
-        if (sock == INVALID_SOCKET)
-            return -1;
+        if (sock == INVALID_SOCKET) continue;
 
         sprintf((char *) helpful_packet, adb_transport_serial_templace, 15 + serial_number_length, serial_number);
         result = adb_send(sock, helpful_packet);
         if (result) {
-            errmsg_print("ERROR: Error while setting adb transport for <%s>", helpful_packet);
+            verbose_print("WARNING: Error while setting adb transport for <%s>\n", helpful_packet);
             closesocket(sock);
-            return 1;
+            continue;
         }
 
         response = adb_send_and_read(sock, adb_api_level, helpful_packet, sizeof(helpful_packet), &data_length);
         closesocket(sock);
+
+        if (!response) {
+            verbose_print("WARNING: Error on socket: <%s>\n", helpful_packet);
+            continue;
+        }
+
         response[data_length] = '\0';
         api_level = (int) g_ascii_strtoll(response, NULL, 10);
-        errmsg_print("VERBOSE: Android API Level for %s is %i", serial_number, api_level);
+        verbose_print("VERBOSE: Android API Level for %s is %i\n", serial_number, api_level);
 
         if (api_level < 21) {
-            new_interface(INTERFACE_ANDROID_LOGCAT_MAIN,   serial_number, "Android Logcat Main");
-            new_interface(INTERFACE_ANDROID_LOGCAT_SYSTEM, serial_number, "Android Logcat System");
-            new_interface(INTERFACE_ANDROID_LOGCAT_RADIO,  serial_number, "Android Logcat Radio");
-            new_interface(INTERFACE_ANDROID_LOGCAT_EVENTS, serial_number, "Android Logcat Events");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_MAIN,   serial_number, "Android Logcat Main");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_SYSTEM, serial_number, "Android Logcat System");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_RADIO,  serial_number, "Android Logcat Radio");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_EVENTS, serial_number, "Android Logcat Events");
         } else {
-            new_interface(INTERFACE_ANDROID_LOGCAT_TEXT_MAIN,   serial_number, "Android Logcat Main");
-            new_interface(INTERFACE_ANDROID_LOGCAT_TEXT_SYSTEM, serial_number, "Android Logcat System");
-            new_interface(INTERFACE_ANDROID_LOGCAT_TEXT_RADIO,  serial_number, "Android Logcat Radio");
-            new_interface(INTERFACE_ANDROID_LOGCAT_TEXT_EVENTS, serial_number, "Android Logcat Events");
-            new_interface(INTERFACE_ANDROID_LOGCAT_TEXT_CRASH,  serial_number, "Android Logcat Crash");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_TEXT_MAIN,   serial_number, "Android Logcat Main");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_TEXT_SYSTEM, serial_number, "Android Logcat System");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_TEXT_RADIO,  serial_number, "Android Logcat Radio");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_TEXT_EVENTS, serial_number, "Android Logcat Events");
+            new_interface(extcap_conf, INTERFACE_ANDROID_LOGCAT_TEXT_CRASH,  serial_number, "Android Logcat Crash");
         }
 
         if (api_level >= 5 && api_level < 17) {
@@ -635,23 +716,23 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
             response = adb_send_and_read(sock, adb_hcidump_version, helpful_packet, sizeof(helpful_packet), &data_length);
             closesocket(sock);
             if (!response || data_length < 1) {
-                errmsg_print("WARNING: Error while getting hcidump version by <%s> (%p len=%"G_GSSIZE_FORMAT")",
+                verbose_print("WARNING: Error while getting hcidump version by <%s> (%p len=%"G_GSSIZE_FORMAT")\n",
                     adb_hcidump_version, (void*)response, data_length);
-                errmsg_print("VERBOSE: Android hcidump version for %s is unknown", serial_number);
+                verbose_print("VERBOSE: Android hcidump version for %s is unknown\n", serial_number);
                 disable_interface = 1;
             } else {
                 response[data_length] = '\0';
 
                 if (g_ascii_strtoull(response, NULL, 10) == 0) {
-                    errmsg_print("VERBOSE: Android hcidump version for %s is unknown", serial_number);
+                    verbose_print("VERBOSE: Android hcidump version for %s is unknown\n", serial_number);
                     disable_interface = 1;
                 } else {
-                    errmsg_print("VERBOSE: Android hcidump version for %s is %s", serial_number, response);
+                    verbose_print("VERBOSE: Android hcidump version for %s is %s\n", serial_number, response);
                 }
             }
 
             if (!disable_interface) {
-                new_interface(INTERFACE_ANDROID_BLUETOOTH_HCIDUMP, serial_number, "Android Bluetooth Hcidump");
+                new_interface(extcap_conf, INTERFACE_ANDROID_BLUETOOTH_HCIDUMP, serial_number, "Android Bluetooth Hcidump");
             }
         }
 
@@ -671,9 +752,9 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
             response = adb_send_and_read(sock, adb_ps_droid_bluetooth, helpful_packet, sizeof(helpful_packet), &data_length);
             closesocket(sock);
             if (!response || data_length < 1) {
-                errmsg_print("WARNING: Error while getting Bluetooth application process id by <%s> "
-                    "(%p len=%"G_GSSIZE_FORMAT")", adb_hcidump_version, (void*)response, data_length);
-                errmsg_print( "VERBOSE: Android Bluetooth application PID for %s is unknown", serial_number);
+                verbose_print("WARNING: Error while getting Bluetooth application process id by <%s> "
+                    "(%p len=%"G_GSSIZE_FORMAT")\n", adb_hcidump_version, (void*)response, data_length);
+                verbose_print( "VERBOSE: Android Bluetooth application PID for %s is unknown\n", serial_number);
                 disable_interface = 1;
             } else {
                 char  *data_str;
@@ -684,7 +765,7 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
 
                 data_str = strchr(response, '\n');
                 if (data_str && sscanf(data_str, "%*s %s", pid) == 1) {
-                    errmsg_print("VERBOSE: Android Bluetooth application PID for %s is %s", serial_number, pid);
+                    verbose_print("VERBOSE: Android Bluetooth application PID for %s is %s\n", serial_number, pid);
 
                     sock = adb_connect(adb_server_ip, adb_server_tcp_port);
                     if (sock == INVALID_SOCKET)
@@ -700,24 +781,29 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
 
                     sprintf((char *) helpful_packet, adb_check_port_templace, strlen(adb_check_port_templace) - 6 + strlen(pid), pid);
                     response = adb_send_and_read(sock, helpful_packet, helpful_packet, sizeof(helpful_packet), &data_length);
-                    response[data_length] = '\0';
                     closesocket(sock);
 
-                    data_str = strchr(response, '\n');
-                    if (data_str && sscanf(data_str, "%*s %s", pid) == 1 && strcmp(pid + 9, "10EA") == 0) {
-                        errmsg_print("VERBOSE: Bluedroid External Parser Port for %s is %s", serial_number, pid + 9);
-                    } else {
+                    if (!response) {
                         disable_interface = 1;
-                        errmsg_print("VERBOSE: Bluedroid External Parser Port for %s is unknown", serial_number);
+                    } else {
+                        response[data_length] = '\0';
+
+                        data_str = strchr(response, '\n');
+                        if (data_str && sscanf(data_str, "%*s %s", pid) == 1 && strcmp(pid + 9, "10EA") == 0) {
+                            verbose_print("VERBOSE: Bluedroid External Parser Port for %s is %s\n", serial_number, pid + 9);
+                        } else {
+                            disable_interface = 1;
+                            verbose_print("VERBOSE: Bluedroid External Parser Port for %s is unknown\n", serial_number);
+                        }
                     }
                 } else {
                     disable_interface = 1;
-                    errmsg_print("VERBOSE: Android Bluetooth application PID for %s is unknown", serial_number);
+                    verbose_print("VERBOSE: Android Bluetooth application PID for %s is unknown\n", serial_number);
                 }
             }
 
             if (!disable_interface) {
-                new_interface(INTERFACE_ANDROID_BLUETOOTH_EXTERNAL_PARSER, serial_number, "Android Bluetooth External Parser");
+                new_interface(extcap_conf, INTERFACE_ANDROID_BLUETOOTH_EXTERNAL_PARSER, serial_number, "Android Bluetooth External Parser");
             }
         }
 
@@ -740,9 +826,9 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
                 response = adb_send_and_read(sock, adb_ps_droid_bluetooth, helpful_packet, sizeof(helpful_packet), &data_length);
             closesocket(sock);
             if (!response || data_length < 1) {
-                errmsg_print("WARNING: Error while getting Bluetooth application process id by <%s> "
-                    "(%p len=%"G_GSSIZE_FORMAT")", adb_hcidump_version, (void*)response, data_length);
-                errmsg_print("VERBOSE: Android Bluetooth application PID for %s is unknown", serial_number);
+                verbose_print("WARNING: Error while getting Bluetooth application process id by <%s> "
+                    "(%p len=%"G_GSSIZE_FORMAT")\n", adb_hcidump_version, (void*)response, data_length);
+                verbose_print("VERBOSE: Android Bluetooth application PID for %s is unknown\n", serial_number);
                 disable_interface = 1;
             } else {
                 char  *data_str;
@@ -753,7 +839,7 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
 
                 data_str = strchr(response, '\n');
                 if (data_str && sscanf(data_str, "%*s %s", pid) == 1) {
-                    errmsg_print("VERBOSE: Android Bluetooth application PID for %s is %s", serial_number, pid);
+                    verbose_print("VERBOSE: Android Bluetooth application PID for %s is %s\n", serial_number, pid);
 
                     sock = adb_connect(adb_server_ip, adb_server_tcp_port);
                     if (sock == INVALID_SOCKET)
@@ -769,62 +855,35 @@ static int list_interfaces(const char *adb_server_ip, unsigned short *adb_server
 
                     sprintf((char *) helpful_packet, adb_check_port_templace, strlen(adb_check_port_templace) - 6 + strlen(pid), pid);
                     response = adb_send_and_read(sock, helpful_packet, helpful_packet, sizeof(helpful_packet), &data_length);
-                    response[data_length] = '\0';
                     closesocket(sock);
 
-                    data_str = strchr(response, '\n');
-                    if (data_str && sscanf(data_str, "%*s %s", pid) == 1 && strcmp(pid + 9, "22A8") == 0) {
-                        errmsg_print("VERBOSE: Btsnoop Net Port for %s is %s", serial_number, pid + 9);
-                    } else {
+                    if (!response) {
                         disable_interface = 1;
-                        errmsg_print("VERBOSE: Btsnoop Net Port for %s is unknown", serial_number);
+                    } else {
+                        response[data_length] = '\0';
+
+                        data_str = strchr(response, '\n');
+                        if (data_str && sscanf(data_str, "%*s %s", pid) == 1 && strcmp(pid + 9, "22A8") == 0) {
+                            verbose_print("VERBOSE: Btsnoop Net Port for %s is %s\n", serial_number, pid + 9);
+                        } else {
+                            disable_interface = 1;
+                            verbose_print("VERBOSE: Btsnoop Net Port for %s is unknown\n", serial_number);
+                        }
                     }
                 } else {
                     disable_interface = 1;
-                    errmsg_print("VERBOSE: Android Bluetooth application PID for %s is unknown", serial_number);
+                    verbose_print("VERBOSE: Android Bluetooth application PID for %s is unknown\n", serial_number);
                 }
             }
 
             if (!disable_interface) {
-                new_interface(INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET, serial_number, "Android Bluetooth Btsnoop Net");
+                new_interface(extcap_conf, INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET, serial_number, "Android Bluetooth Btsnoop Net");
             }
         }
     }
 
     return 0;
 }
-
-static int list_dlts(char *interface) {
-    if (!interface) {
-        errmsg_print("ERROR: No interface specified.");
-        return 1;
-    }
-
-    if (is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_HCIDUMP) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_EXTERNAL_PARSER) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET)) {
-        printf("dlt {number=99}{name=BluetoothH4}{display=Bluetooth HCI UART transport layer plus pseudo-header}\n");
-        return 0;
-    } else if (is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_MAIN) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_SYSTEM) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_RADIO) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_EVENTS) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_MAIN) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_SYSTEM) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_RADIO) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_EVENTS) ||
-            is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_CRASH)) {
-        printf("dlt {number=252}{name=Upper PDU}{display=Upper PDU}\n");
-        return 0;
-    } else if (is_specified_interface(interface, INTERFACE_ANDROID_WIFI_TCPDUMP)) {
-        printf("dlt {number=1}{name=Ethernet}{display=Ethernet}\n");
-        return 0;
-    }
-
-    errmsg_print("ERROR: Invalid interface: <%s>", interface);
-    return 1;
-}
-
 
 static int list_config(char *interface) {
     if (!interface) {
@@ -976,6 +1035,12 @@ static int capture_android_bluetooth_hcidump(char *interface, char *fifo,
             return 100;
         }
 
+        if (length <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+            closesocket(sock);
+            return 101;
+        }
+
         used_buffer_length += length;
         i_position =  (char *) memchr(data, '\n', used_buffer_length);
         if (i_position && i_position < data + used_buffer_length) {
@@ -991,7 +1056,7 @@ static int capture_android_bluetooth_hcidump(char *interface, char *fifo,
             if (i_position) {
                 i_position += 1;
                 if (!strncmp(state_line_position, "Can't access device: Permission denied", 38)) {
-                    errmsg_print("WARNING: No permission for command <%s>", adb_shell_hcidump);
+                    verbose_print("WARNING: No permission for command <%s>\n", adb_shell_hcidump);
                     used_buffer_length = 0;
                     try_next += 1;
                     break;
@@ -1036,6 +1101,12 @@ static int capture_android_bluetooth_hcidump(char *interface, char *fifo,
                 return 100;
             }
 
+            if (length <= 0) {
+                errmsg_print("ERROR: Broken socket connection.");
+                closesocket(sock);
+                return 101;
+            }
+
             used_buffer_length += length;
             i_position =  (char *) memchr(data, '\n', used_buffer_length);
             if (i_position && i_position < data + used_buffer_length) {
@@ -1064,6 +1135,12 @@ static int capture_android_bluetooth_hcidump(char *interface, char *fifo,
             errmsg_print("ERROR capture: %s", strerror(errno));
             closesocket(sock);
             return 100;
+        }
+
+        if (length <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+            closesocket(sock);
+            return 101;
         }
 
         while (endless_loop) {
@@ -1156,7 +1233,7 @@ static int capture_android_bluetooth_hcidump(char *interface, char *fifo,
                     &date.tm_year, &date.tm_mon, &date.tm_mday, &date.tm_hour,
                     &date.tm_min, &date.tm_sec, &ms, &direction_character)) {
 
-                errmsg_print("time %04d-%02d-%02d %02d:%02d:%02d.%06d %c",
+                verbose_print("time %04d-%02d-%02d %02d:%02d:%02d.%06d %c\n",
                             date.tm_year, date.tm_mon, date.tm_mday, date.tm_hour,
                             date.tm_min, date.tm_sec, ms, direction_character);
                 date.tm_mon -= 1;
@@ -1311,7 +1388,7 @@ static int capture_android_bluetooth_external_parser(char *interface,
                 return 4;
             }
 
-            verbose_print("VERBOSE: Client port %u", GUINT16_FROM_BE(client.sin_port));
+            verbose_print("VERBOSE: Client port %u\n", GUINT16_FROM_BE(client.sin_port));
         }
     } else {
         int  result;
@@ -1363,7 +1440,7 @@ static int capture_android_bluetooth_external_parser(char *interface,
                 closesocket(sock);
 
                 if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET) {
-                    errmsg_print("ERROR1: %s", strerror(errno));
+                    errmsg_print("ERROR: %s", strerror(errno));
                     return 1;
                 }
 
@@ -1545,6 +1622,13 @@ static int capture_android_bluetooth_btsnoop_net(char *interface, char *fifo,
     /* Read "btsnoop" header - 16 bytes */
     while (used_buffer_length < 16) {
         length = recv(sock, packet + used_buffer_length,  (int)(PACKET_LENGTH - used_buffer_length), 0);
+
+        if (length <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+            closesocket(sock);
+            return 101;
+        }
+
         used_buffer_length += length;
     }
     if (used_buffer_length > 16)
@@ -1984,12 +2068,9 @@ static int capture_android_logcat(char *interface, char *fifo,
     }
 
     closesocket(sock);
+
     return 0;
 }
-
-/*============================================================================*/
-
-
 
 /*----------------------------------------------------------------------------*/
 /* Android Wifi Tcpdump                                                       */
@@ -2041,20 +2122,14 @@ static int capture_android_wifi_tcpdump(char *interface, char *fifo,
             15 + strlen(serial_number), serial_number);
         result = adb_send(sock, helpful_packet);
         if (result) {
-            printf("ERROR: Error while setting adb transport");
-            fflush(stdout);
-            errmsg_print("ERROR: Error while setting adb transport for <%s>",
-                helpful_packet);
+            errmsg_print("ERROR: Error while setting adb transport");
             closesocket(sock);
             return 1;
         }
     }
     result = adb_send(sock, adb_shell_tcpdump);
     if (result) {
-        printf("ERROR: Error while setting adb transport");
-        fflush(stdout);
-        errmsg_print("ERROR: Error while starting capture by sending command: %s",
-            adb_shell_tcpdump);
+        errmsg_print("ERROR: Error while setting adb transport");
         closesocket(sock);
         return 1;
     }
@@ -2067,9 +2142,16 @@ static int capture_android_wifi_tcpdump(char *interface, char *fifo,
         if (errno == EAGAIN || (EWOULDBLOCK != EAGAIN && errno == EWOULDBLOCK))
             continue;
         else if (errno != 0) {
-            verbose_print("ERROR capture: %s", strerror(errno));
+            errmsg_print("ERROR capture: %s", strerror(errno));
             return 100;
         }
+
+        if (length <= 0) {
+            errmsg_print("ERROR: Broken socket connection.");
+            closesocket(sock);
+            return 101;
+        }
+
         used_buffer_length += length;
 
         /*
@@ -2182,7 +2264,14 @@ static int capture_android_wifi_tcpdump(char *interface, char *fifo,
                 errmsg_print("ERROR capture: %s", strerror(errno));
                 return 100;
             }
-            if (length > 0 && (used_buffer_length += length)>1) {
+
+            if (length <= 0) {
+                errmsg_print("ERROR: Broken socket connection.");
+                closesocket(sock);
+                return 101;
+            }
+
+            if (used_buffer_length += length > 1) {
                 break;
             }
         }
@@ -2194,13 +2283,7 @@ static int capture_android_wifi_tcpdump(char *interface, char *fifo,
 
 int main(int argc, char **argv) {
     int              option_idx = 0;
-    int              do_capture = 0;
-    int              do_config = 0;
-    int              do_list_interfaces = 0;
-    int              do_dlts = 0;
     int              result;
-    char            *fifo = NULL;
-    char            *interface = NULL;
     const char      *adb_server_ip       = NULL;
     unsigned short  *adb_server_tcp_port = NULL;
     unsigned int     logcat_text   = 0;
@@ -2216,6 +2299,8 @@ int main(int argc, char **argv) {
     unsigned short   default_bt_server_tcp_port = 4330;
     const char      *default_bt_local_ip = "127.0.0.1";
     unsigned short   default_bt_local_tcp_port  = 4330;
+    extcap_parameters * extcap_conf = NULL;
+
 #ifdef _WIN32
     WSADATA          wsaData;
 
@@ -2229,12 +2314,15 @@ int main(int argc, char **argv) {
         help();
         return 0;
     }
+    extcap_conf = g_new0(extcap_parameters, 1);
+
+    extcap_base_set_util_info(extcap_conf, ANDROIDDUMP_VERSION_MAJOR, ANDROIDDUMP_VERSION_MINOR, ANDROIDDUMP_VERSION_RELEASE, NULL);
 
     while ((result = getopt_long(argc, argv, "", longopts, &option_idx)) != -1) {
         switch (result) {
 
         case OPT_VERSION:
-            printf("%u.%u.%u\n", ANDROIDDUMP_VERSION_MAJOR, ANDROIDDUMP_VERSION_MINOR, ANDROIDDUMP_VERSION_RELEASE);
+            printf("%s.%s.%s\n", ANDROIDDUMP_VERSION_MAJOR, ANDROIDDUMP_VERSION_MINOR, ANDROIDDUMP_VERSION_RELEASE);
             return 0;
         case OPT_VERBOSE:
             if (optarg)
@@ -2252,27 +2340,6 @@ int main(int argc, char **argv) {
                 }
                 verbose_print("\n");
             }
-            break;
-        case OPT_LIST_INTERFACES:
-            do_list_interfaces = 1;
-            break;
-        case OPT_LIST_DLTS:
-            do_dlts = 1;
-            break;
-        case OPT_INTERFACE:
-            interface = optarg;
-            break;
-        case OPT_CONFIG:
-            do_config = 1;
-            break;
-        case OPT_CAPTURE:
-            do_capture = 1;
-            break;
-        case OPT_CAPTURE_FILTER:
-            /* currently unused */
-            break;
-        case OPT_FIFO:
-            fifo = optarg;
             break;
         case OPT_HELP:
             help();
@@ -2314,8 +2381,11 @@ int main(int argc, char **argv) {
             *bt_local_tcp_port = (unsigned short) g_ascii_strtoull(optarg, NULL, 10);
             break;
         default:
-            printf("Invalid argument <%s>. Try --help.\n", argv[optind - 1]);
-            return -1;
+            if (!extcap_base_parse_options(extcap_conf, result - EXTCAP_OPT_LIST_INTERFACES, optarg))
+            {
+                printf("Invalid argument <%s>. Try --help.\n", argv[optind - 1]);
+                return -1;
+            }
         }
     }
 
@@ -2334,12 +2404,6 @@ int main(int argc, char **argv) {
     if (!bt_local_tcp_port)
         bt_local_tcp_port = &default_bt_local_tcp_port;
 
-    if (do_config)
-        return list_config(interface);
-
-    if (do_dlts)
-        return list_dlts(interface);
-
 #ifdef _WIN32
     result = WSAStartup(MAKEWORD(1,1), &wsaData);
     if (result != 0) {
@@ -2348,44 +2412,45 @@ int main(int argc, char **argv) {
     }
 #endif  /* _WIN32 */
 
-    if (do_list_interfaces)
-    {
-        list_interfaces(adb_server_ip, adb_server_tcp_port);
+    if (extcap_conf->do_list_interfaces)
+        register_interfaces(extcap_conf, adb_server_ip, adb_server_tcp_port);
+
+    if (extcap_base_handle_interface(extcap_conf))
         return 0;
-    }
 
-    if (fifo == NULL) {
-        errmsg_print("ERROR: No FIFO or file specified");
-        return 1;
-    }
+    if (extcap_conf->show_config)
+        return list_config(extcap_conf->interface);
 
-    if (do_capture) {
-        if (interface && (is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_MAIN) ||
-                is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_SYSTEM) ||
-                is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_RADIO) ||
-                is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_EVENTS)))
+    if (extcap_conf->capture) {
+        if (extcap_conf->interface && (is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_MAIN) ||
+                is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_SYSTEM) ||
+                is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_RADIO) ||
+                is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_EVENTS)))
             if (logcat_text)
-                return capture_android_logcat_text(interface, fifo, adb_server_ip, adb_server_tcp_port);
+                return capture_android_logcat_text(extcap_conf->interface, extcap_conf->fifo, adb_server_ip, adb_server_tcp_port);
             else
-                return capture_android_logcat(interface, fifo, adb_server_ip, adb_server_tcp_port);
-        else if (interface && (is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_MAIN) ||
-                is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_SYSTEM) ||
-                is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_RADIO) ||
-                is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_EVENTS) ||
-                (is_specified_interface(interface, INTERFACE_ANDROID_LOGCAT_TEXT_CRASH))))
-            return capture_android_logcat_text(interface, fifo, adb_server_ip, adb_server_tcp_port);
-        else if (interface && is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_HCIDUMP))
-            return capture_android_bluetooth_hcidump(interface, fifo, adb_server_ip, adb_server_tcp_port);
-        else if (interface && is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_EXTERNAL_PARSER))
-            return capture_android_bluetooth_external_parser(interface, fifo, adb_server_ip, adb_server_tcp_port,
+                return capture_android_logcat(extcap_conf->interface, extcap_conf->fifo, adb_server_ip, adb_server_tcp_port);
+        else if (extcap_conf->interface && (is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_TEXT_MAIN) ||
+                is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_TEXT_SYSTEM) ||
+                is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_TEXT_RADIO) ||
+                is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_TEXT_EVENTS) ||
+                (is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_LOGCAT_TEXT_CRASH))))
+            return capture_android_logcat_text(extcap_conf->interface, extcap_conf->fifo, adb_server_ip, adb_server_tcp_port);
+        else if (extcap_conf->interface && is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_BLUETOOTH_HCIDUMP))
+            return capture_android_bluetooth_hcidump(extcap_conf->interface, extcap_conf->fifo, adb_server_ip, adb_server_tcp_port);
+        else if (extcap_conf->interface && is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_BLUETOOTH_EXTERNAL_PARSER))
+            return capture_android_bluetooth_external_parser(extcap_conf->interface, extcap_conf->fifo, adb_server_ip, adb_server_tcp_port,
                     bt_server_tcp_port, bt_forward_socket, bt_local_ip, bt_local_tcp_port);
-        else if (interface && (is_specified_interface(interface, INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET)))
-            return capture_android_bluetooth_btsnoop_net(interface, fifo, adb_server_ip, adb_server_tcp_port);
-        else if (interface && (is_specified_interface(interface,INTERFACE_ANDROID_WIFI_TCPDUMP)))
-            return capture_android_wifi_tcpdump(interface, fifo, adb_server_ip,adb_server_tcp_port);
+        else if (extcap_conf->interface && (is_specified_interface(extcap_conf->interface, INTERFACE_ANDROID_BLUETOOTH_BTSNOOP_NET)))
+            return capture_android_bluetooth_btsnoop_net(extcap_conf->interface, extcap_conf->fifo, adb_server_ip, adb_server_tcp_port);
+        else if (extcap_conf->interface && (is_specified_interface(extcap_conf->interface,INTERFACE_ANDROID_WIFI_TCPDUMP)))
+            return capture_android_wifi_tcpdump(extcap_conf->interface, extcap_conf->fifo, adb_server_ip,adb_server_tcp_port);
         else
             return 2;
     }
+
+    /* clean up stuff */
+    extcap_base_cleanup(&extcap_conf);
 
     return 0;
 }
