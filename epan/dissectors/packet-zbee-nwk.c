@@ -32,6 +32,7 @@
 #include <epan/addr_resolv.h>
 #include <epan/expert.h>
 #include <epan/proto_data.h>
+#include "packet-ieee802154.h"
 #include "packet-zbee.h"
 #include "packet-zbee-nwk.h"
 #include "packet-zbee-security.h"
@@ -44,6 +45,10 @@ static int         dissect_zbee_nwk        (tvbuff_t *tvb, packet_info *pinfo, p
 static void        dissect_zbee_nwk_cmd    (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, zbee_nwk_packet* packet);
 static int         dissect_zbee_beacon     (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data);
 static int         dissect_zbip_beacon     (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data);
+static int         dissect_zbee_ie         (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data);
+static void        dissect_ieee802154_zigbee_rejoin(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint *offset);
+static void        dissect_ieee802154_zigbee_txpower(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint *offset);
+
 
 /* Command Dissector Helpers */
 static guint       dissect_zbee_nwk_route_req  (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
@@ -62,6 +67,7 @@ static guint       dissect_zbee_nwk_report     (tvbuff_t *tvb, packet_info *pinf
 static guint       dissect_zbee_nwk_update     (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint offset);
 static guint       dissect_zbee_nwk_ed_timeout_request(tvbuff_t *tvb, proto_tree *tree, guint offset);
 static guint       dissect_zbee_nwk_ed_timeout_response(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint offset);
+static guint       dissect_zbee_nwk_link_pwr_delta(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint offset);
 static void        proto_init_zbee_nwk         (void);
 static void        proto_cleanup_zbee_nwk(void);
 void               proto_register_zbee_nwk(void);
@@ -73,6 +79,7 @@ void               proto_reg_handoff_zbee_nwk(void);
 static int proto_zbee_nwk = -1;
 static int proto_zbee_beacon = -1;
 static int proto_zbip_beacon = -1;
+static int proto_zbee_ie = -1;
 static int hf_zbee_nwk_fcf = -1;
 static int hf_zbee_nwk_frame_type = -1;
 static int hf_zbee_nwk_proto_version = -1;
@@ -116,6 +123,7 @@ static int hf_zbee_nwk_cmd_route_opt_resp_ext = -1;
 static int hf_zbee_nwk_cmd_route_opt_orig_ext = -1;
 static int hf_zbee_nwk_cmd_route_opt_many_to_one = -1;
 static int hf_zbee_nwk_cmd_nwk_status = -1;
+static int hf_zbee_nwk_cmd_nwk_status_command_id = -1;
 static int hf_zbee_nwk_cmd_leave_rejoin = -1;
 static int hf_zbee_nwk_cmd_leave_request = -1;
 static int hf_zbee_nwk_cmd_leave_children = -1;
@@ -148,6 +156,10 @@ static int hf_zbee_nwk_cmd_end_device_timeout_resp_status = -1;
 static int hf_zbee_nwk_cmd_end_device_timeout_resp_parent_info = -1;
 static int hf_zbee_nwk_cmd_prnt_info_mac_data_poll_keepalive_supported = -1;
 static int hf_zbee_nwk_cmd_prnt_info_ed_to_req_keepalive_supported = -1;
+static int hf_zbee_nwk_cmd_link_pwr_list_count = -1;
+static int hf_zbee_nwk_cmd_link_pwr_type = -1;
+static int hf_zbee_nwk_cmd_link_pwr_device_address = -1;
+static int hf_zbee_nwk_cmd_link_pwr_power_delta = -1;
 
 /*  ZigBee Beacons */
 static int hf_zbee_beacon_protocol = -1;
@@ -166,8 +178,18 @@ static int hf_zbip_beacon_host_capacity = -1;
 static int hf_zbip_beacon_unsecure = -1;
 static int hf_zbip_beacon_network_id = -1;
 
+/* IEEE 802.15.4 IEs (Information Elements) */
+static int hf_ieee802154_zigbee_ie = -1;
+static int hf_ieee802154_zigbee_ie_id = -1;
+static int hf_ieee802154_zigbee_ie_length = -1;
+static int hf_ieee802154_zigbee_ie_tx_power = -1;
+static int hf_ieee802154_zigbee_ie_source_addr = -1;
+
+static int hf_ieee802154_zigbee_rejoin_epid = -1;
+static int hf_ieee802154_zigbee_rejoin_source_addr = -1;
+
 static gint ett_zbee_nwk = -1;
-static gint ett_zbee_beacon = -1;
+static gint ett_zbee_nwk_beacon = -1;
 static gint ett_zbee_nwk_fcf = -1;
 static gint ett_zbee_nwk_fcf_ext = -1;
 static gint ett_zbee_nwk_mcast = -1;
@@ -177,6 +199,12 @@ static gint ett_zbee_nwk_cmd_options = -1;
 static gint ett_zbee_nwk_cmd_cinfo = -1;
 static gint ett_zbee_nwk_cmd_link = -1;
 static gint ett_zbee_nwk_cmd_ed_to_rsp_prnt_info = -1;
+static gint ett_zbee_nwk_cmd_link_pwr_struct = -1;
+static gint ett_zbee_nwk_zigbee_ie_fields = -1;
+static gint ett_zbee_nwk_ie_rejoin = -1;
+static gint ett_zbee_nwk_header = -1;
+static gint ett_zbee_nwk_header_ie = -1;
+static gint ett_zbee_nwk_beacon_bitfield = -1;
 
 static expert_field ei_zbee_nwk_missing_payload = EI_INIT;
 
@@ -203,18 +231,19 @@ static const value_string zbee_nwk_discovery_modes[] = {
 
 /* Command Names*/
 static const value_string zbee_nwk_cmd_names[] = {
-    { ZBEE_NWK_CMD_ROUTE_REQ,       "Route Request" },
-    { ZBEE_NWK_CMD_ROUTE_REPLY,     "Route Reply" },
-    { ZBEE_NWK_CMD_NWK_STATUS,      "Network Status" },
-    { ZBEE_NWK_CMD_LEAVE,           "Leave" },
-    { ZBEE_NWK_CMD_ROUTE_RECORD,    "Route Record" },
-    { ZBEE_NWK_CMD_REJOIN_REQ,      "Rejoin Request" },
-    { ZBEE_NWK_CMD_REJOIN_RESP,     "Rejoin Response" },
-    { ZBEE_NWK_CMD_LINK_STATUS,     "Link Status" },
-    { ZBEE_NWK_CMD_NWK_REPORT,      "Network Report" },
-    { ZBEE_NWK_CMD_NWK_UPDATE,      "Network Update" },
+    { ZBEE_NWK_CMD_ROUTE_REQ,           "Route Request" },
+    { ZBEE_NWK_CMD_ROUTE_REPLY,         "Route Reply" },
+    { ZBEE_NWK_CMD_NWK_STATUS,          "Network Status" },
+    { ZBEE_NWK_CMD_LEAVE,               "Leave" },
+    { ZBEE_NWK_CMD_ROUTE_RECORD,        "Route Record" },
+    { ZBEE_NWK_CMD_REJOIN_REQ,          "Rejoin Request" },
+    { ZBEE_NWK_CMD_REJOIN_RESP,         "Rejoin Response" },
+    { ZBEE_NWK_CMD_LINK_STATUS,         "Link Status" },
+    { ZBEE_NWK_CMD_NWK_REPORT,          "Network Report" },
+    { ZBEE_NWK_CMD_NWK_UPDATE,          "Network Update" },
     { ZBEE_NWK_CMD_ED_TIMEOUT_REQUEST,  "End Device Timeout Request" },
     { ZBEE_NWK_CMD_ED_TIMEOUT_RESPONSE, "End Device Timeout Response" },
+    { ZBEE_NWK_CMD_LINK_PWR_DELTA,      "Link Power Delta" },
     { 0, NULL }
 };
 
@@ -307,6 +336,22 @@ static const value_string zbee_nwk_end_device_timeout_resp_status[] = {
     { 0, NULL }
 };
 
+/* Names of IEEE 802.15.4 IEs (Information Elements) for ZigBee */
+static const value_string ieee802154_zigbee_ie_names[] = {
+    { ZBEE_ZIGBEE_IE_REJOIN,                    "ReJoin"   },
+    { ZBEE_ZIGBEE_IE_TX_POWER,                  "Tx Power" },
+    { ZBEE_ZIGBEE_IE_BEACON_PAYLOAD,            "Extended Beacon Payload" },
+    { 0, NULL }
+};
+
+/* Stack Profile Values. */
+static const value_string zbee_nwk_link_power_delta_types[] = {
+    { 0x00, "Notification" },
+    { 0x01, "Request" },
+    { 0x02, "Response" },
+    { 0x03, "Reserved" },
+    { 0, NULL }
+};
 
 /* TODO: much of the following copied from ieee80154 dissector */
 /*-------------------------------------
@@ -808,6 +853,10 @@ static void dissect_zbee_nwk_cmd(tvbuff_t *tvb, packet_info *pinfo, proto_tree *
             offset = dissect_zbee_nwk_ed_timeout_response(tvb, pinfo, cmd_tree, offset);
             break;
 
+        case ZBEE_NWK_CMD_LINK_PWR_DELTA:
+            offset = dissect_zbee_nwk_link_pwr_delta(tvb, pinfo, cmd_tree, offset);
+            break;
+
         default:
             /* Just break out and let the overflow handler deal with the payload. */
             break;
@@ -978,6 +1027,7 @@ static guint
 dissect_zbee_nwk_status(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, guint offset)
 {
     guint8  status_code;
+    guint8  command_id;
     guint16 addr;
 
     /* Get and display the status code. */
@@ -992,6 +1042,14 @@ dissect_zbee_nwk_status(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gui
 
     /* Update the info column. */
     col_append_fstr(pinfo->cinfo, COL_INFO, ", 0x%04x: %s", addr, val_to_str_const(status_code, zbee_nwk_status_codes, "Unknown Status Code"));
+
+    if (status_code == ZBEE_NWK_STATUS_UNKNOWN_COMMAND) {
+        command_id = tvb_get_guint8(tvb, offset);
+        proto_tree_add_uint(tree, hf_zbee_nwk_cmd_nwk_status_command_id, tvb, offset, 1, command_id);
+        col_append_fstr(pinfo->cinfo, COL_INFO, ", Unknown Command ID 0x%02x (%s)", command_id,
+                val_to_str_const(command_id, zbee_nwk_cmd_names, "Unknown ID"));
+        offset++;
+    }
 
     /* Done */
     return offset;
@@ -1231,6 +1289,47 @@ dissect_zbee_nwk_ed_timeout_response(tvbuff_t *tvb, packet_info *pinfo, proto_tr
 } /* dissect_zbee_nwk_ed_timeout_response */
 
 /**
+ *Helper dissector for the Link Power Delta command.
+ *
+ *@param tvb pointer to buffer containing raw packet.
+ *@param tree pointer to the command subtree.
+ *@param  offset into the tvb to begin dissection.
+ *@return offset after command dissection.
+*/
+static guint
+dissect_zbee_nwk_link_pwr_delta(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint offset)
+{
+    int     i;
+    int     count;
+    gint    delta;
+    guint8  type;
+    guint16 addr;
+    proto_tree *subtree;
+
+    type = tvb_get_guint8(tvb, offset) & ZBEE_NWK_CMD_NWK_LINK_PWR_DELTA_TYPE_MASK;
+    proto_tree_add_item(tree, hf_zbee_nwk_cmd_link_pwr_type, tvb, offset, 1, ENC_NA);
+    offset++;
+
+    count = tvb_get_guint8(tvb, offset);
+    proto_tree_add_item(tree, hf_zbee_nwk_cmd_link_pwr_list_count, tvb, offset, 1, ENC_NA);
+    offset++;
+
+    proto_item_append_text(tree, ": %s, Count %d", val_to_str_const(type, zbee_nwk_link_power_delta_types, "Unknown"), count);
+
+    for (i=0; i<count; i++) {
+        subtree = proto_tree_add_subtree(tree, tvb, count, 3, ett_zbee_nwk_cmd_link_pwr_struct, NULL, "Power Delta Structure");
+        addr = tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(subtree, hf_zbee_nwk_cmd_link_pwr_device_address, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+        offset += 2;
+        delta = (char)tvb_get_guint8(tvb, offset);
+        proto_tree_add_item(subtree, hf_zbee_nwk_cmd_link_pwr_power_delta, tvb, offset, 1, ENC_NA);
+        offset++;
+        proto_item_append_text(subtree, ": Device Address 0x%04X, Power Delta %d dBm", addr, delta);
+    }
+    return offset;
+}
+
+/**
  *Helper dissector for the Network Report command.
  *
  *@param tvb pointer to buffer containing raw packet.
@@ -1350,61 +1449,57 @@ dissect_zbee_beacon_heur(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, vo
 } /* dissect_zbee_beacon_heur */
 
 /**
- *Dissector for ZigBee network beacons.
+ *Dissector for Legacy ZigBee Beacon Payloads (prior to the Enhanced Beacon)
  *
  *@param tvb pointer to buffer containing raw packet.
  *@param pinfo pointer to packet information fields
  *@param tree pointer to data tree Wireshark uses to display packet.
 */
-static int dissect_zbee_beacon(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
+static int dissect_zbee_beacon(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
 {
-    ieee802154_packet   *packet;
 
     proto_item  *beacon_root;
     proto_tree  *beacon_tree;
-    guint       offset = 0;
+    guint        offset = 0;
+    guint8       version;
+    guint32      profile;
 
-    guint8      version;
-    guint64     epid;
-
-    /* Reject the packet if data is NULL */
-    if (data == NULL)
-        return 0;
-    packet = (ieee802154_packet *)data;
+    static const int * beacon_fields[] = {
+        &hf_zbee_beacon_stack_profile,
+        &hf_zbee_beacon_version,
+        &hf_zbee_beacon_router_capacity,
+        &hf_zbee_beacon_depth,
+        &hf_zbee_beacon_end_device_capacity,
+        NULL
+    };
 
     /* Add ourself to the protocol column. */
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZigBee");
     /* Create the tree for this beacon. */
     beacon_root = proto_tree_add_item(tree, proto_zbee_beacon, tvb, 0, -1, ENC_NA);
-    beacon_tree = proto_item_add_subtree(beacon_root, ett_zbee_beacon);
-
-    /* Update the info column. */
-    col_add_fstr(pinfo->cinfo, COL_INFO, "Beacon, Src: 0x%04x", packet->src16);
+    beacon_tree = proto_item_add_subtree(beacon_root, ett_zbee_nwk_beacon);
 
     /* Get and display the protocol id, must be 0 on all ZigBee beacons. */
     proto_tree_add_item(beacon_tree, hf_zbee_beacon_protocol, tvb, offset, 1, ENC_NA);
     offset += 1;
 
-    /* Get and display the stack profile and protocol version. */
-    version = zbee_get_bit_field(tvb_get_guint8(tvb, offset), ZBEE_NWK_BEACON_PROTOCOL_VERSION);
-    proto_tree_add_item(beacon_tree, hf_zbee_beacon_stack_profile, tvb, offset, 1, ENC_NA);
-    proto_tree_add_item(beacon_tree, hf_zbee_beacon_version, tvb, offset, 1, ENC_NA);
-    offset += 1;
+    proto_tree_add_bitmask_text(beacon_tree, tvb, offset, 2, "Beacon: ", NULL , ett_zbee_nwk_beacon_bitfield, beacon_fields,
+            ENC_LITTLE_ENDIAN, BMT_NO_INT|BMT_NO_TFS);
 
-    /* Get and display the security level and flags. */
-    proto_tree_add_item(beacon_tree, hf_zbee_beacon_router_capacity, tvb, offset, 1, ENC_NA);
-    proto_tree_add_item(beacon_tree, hf_zbee_beacon_depth, tvb, offset, 1, ENC_NA);
-    proto_tree_add_item(beacon_tree, hf_zbee_beacon_end_device_capacity, tvb, offset, 1, ENC_NA);
-    offset += 1;
+    /* Get and display the stack profile and protocol version. */
+    version = (guint8)((tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN) & ZBEE_NWK_BEACON_PROTOCOL_VERSION) >> 4);
+    profile = (guint32)(tvb_get_guint16(tvb, offset, ENC_LITTLE_ENDIAN) & ZBEE_NWK_BEACON_STACK_PROFILE);
+    proto_item_append_text(beacon_root, ", %s", val_to_str_const(profile, zbee_nwk_stack_profiles, "Unknown Profile"));
+    offset += 2;
 
     if (version >= ZBEE_VERSION_2007) {
         /* In ZigBee 2006 and later, the beacon contains an extended PAN ID. */
-        epid = tvb_get_letoh64(tvb, offset);
         proto_tree_add_item(beacon_tree, hf_zbee_beacon_epid, tvb, offset, 8, ENC_LITTLE_ENDIAN);
+        col_append_fstr(pinfo->cinfo, COL_INFO, ", EPID: %s", eui64_to_display(wmem_packet_scope(),
+                tvb_get_guint64(tvb, offset, ENC_LITTLE_ENDIAN)));
+        proto_item_append_text(beacon_root, ", EPID: %s", eui64_to_display(wmem_packet_scope(),
+                tvb_get_guint64(tvb, offset, ENC_LITTLE_ENDIAN)));
         offset += 8;
-
-        /* Update the Info Column with the EPID. */
-        col_append_fstr(pinfo->cinfo, COL_INFO, ", EPID: %s", eui64_to_display(wmem_packet_scope(), epid));
 
         /*
          * In ZigBee 2006 the Tx-Offset is optional, while in the 2007 and
@@ -1428,25 +1523,9 @@ static int dissect_zbee_beacon(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
         proto_tree_add_item(beacon_tree, hf_zbee_beacon_tx_offset, tvb, offset, 3, ENC_LITTLE_ENDIAN);
         offset += 3;
 
-        /* Update the info column with the PAN ID. */
-        col_append_fstr(pinfo->cinfo, COL_INFO, ", PAN: 0x%04x", packet->src_pan);
     }
 
-    /* Check for leftover bytes. */
-    if (offset < tvb_captured_length(tvb)) {
-        /* Bytes leftover! */
-        tvbuff_t    *leftover_tvb   = tvb_new_subset_remaining(tvb, offset);
-        proto_tree  *root;
-
-        /* Correct the length of the beacon tree. */
-        root = proto_tree_get_root(tree);
-        proto_item_set_len(beacon_root, offset);
-
-        /* Dump the leftover to the data dissector. */
-        call_data_dissector(leftover_tvb, pinfo, root);
-    }
-
-    return tvb_captured_length(tvb);
+    return offset;
 } /* dissect_zbee_beacon */
 
 /**
@@ -1496,7 +1575,7 @@ static int dissect_zbip_beacon(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZigBee IP");
     /* Create the tree for this beacon. */
     beacon_root = proto_tree_add_item(tree, proto_zbip_beacon, tvb, 0, -1, ENC_NA);
-    beacon_tree = proto_item_add_subtree(beacon_root, ett_zbee_beacon);
+    beacon_tree = proto_item_add_subtree(beacon_root, ett_zbee_nwk_beacon);
 
     /* Update the info column. */
     col_clear(pinfo->cinfo, COL_INFO);
@@ -1537,6 +1616,123 @@ static int dissect_zbip_beacon(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tr
     }
     return tvb_captured_length(tvb);
 } /* dissect_zbip_beacon */
+
+/**
+ *Subdissector command for ZigBee Specific IEs (Information Elements)
+ *
+ *@param tvb pointer to buffer containing raw packet.
+ *@param pinfo pointer to packet information fields (unused).
+ *@param tree pointer to command subtree.
+ *@param data pointer to the length of the payload IE.
+*/
+static int
+dissect_zbee_ie(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
+{
+    proto_tree *subtree;
+    tvbuff_t   *ie_tvb;
+    guint16     zigbee_ie;
+    guint16     id;
+    guint16     length;
+    guint       pie_length;
+    guint       offset = 0;
+
+    static const int * fields[] = {
+        &hf_ieee802154_zigbee_ie_id,
+        &hf_ieee802154_zigbee_ie_length,
+        NULL
+    };
+
+    pie_length = *(gint *)data;
+
+    do {
+        zigbee_ie =  tvb_get_letohs(tvb, offset);
+        id        = (zigbee_ie & ZBEE_ZIGBEE_IE_ID_MASK) >> 6;
+        length    =  zigbee_ie & ZBEE_ZIGBEE_IE_LENGTH_MASK;
+
+        /* Create a subtree for this command frame. */
+        subtree = proto_tree_add_subtree(tree, tvb, offset, 2+length, ett_zbee_nwk_header, NULL, "ZigBee IE");
+        proto_item_append_text(subtree, ", %s, Length: %d", val_to_str_const(id, ieee802154_zigbee_ie_names, "Unknown"), length);
+
+        proto_tree_add_bitmask(subtree, tvb, offset, hf_ieee802154_zigbee_ie,
+                               ett_zbee_nwk_zigbee_ie_fields, fields, ENC_LITTLE_ENDIAN);
+        offset += 2;
+
+        switch (id) {
+            case ZBEE_ZIGBEE_IE_REJOIN:
+                dissect_ieee802154_zigbee_rejoin(tvb, pinfo, subtree, &offset);
+                break;
+
+            case ZBEE_ZIGBEE_IE_TX_POWER:
+                dissect_ieee802154_zigbee_txpower(tvb, pinfo, subtree, &offset);
+                break;
+
+            case ZBEE_ZIGBEE_IE_BEACON_PAYLOAD:
+                ie_tvb = tvb_new_subset_length(tvb, offset, ZBEE_NWK_BEACON_LENGTH);
+                offset += dissect_zbee_beacon(ie_tvb, pinfo, subtree, NULL); /* Legacy ZigBee Beacon */
+                dissect_ieee802154_superframe(tvb, pinfo, subtree, &offset);
+                proto_tree_add_item(subtree, hf_ieee802154_zigbee_ie_source_addr, tvb, offset, 2, ENC_NA);
+                offset += 2;
+                break;
+
+            default:
+                if (length > 0) { /* just use the data dissector */
+                    call_data_dissector(tvb, pinfo, tree);
+                    offset += length;
+                }
+                break;
+        }
+    } while (offset < pie_length);
+
+    return tvb_captured_length(tvb);
+}
+
+/**
+ *Subdissector for the ZigBee specific TX Power IE (information element)
+ *
+ *@param tvb pointer to buffer containing raw packet.
+ *@param pinfo pointer to packet information fields (unused).
+ *@param tree pointer to command subtree.
+ *@param offset offset into the tvbuff to begin dissection.
+*/
+static void
+dissect_ieee802154_zigbee_txpower(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint *offset)
+{
+    gint32 txpower;
+
+    txpower = (char)tvb_get_guint8(tvb, *offset); /* tx power is a signed byte */
+
+    proto_tree_add_item_ret_int(tree, hf_ieee802154_zigbee_ie_tx_power, tvb, *offset, 1, ENC_NA, &txpower);
+    proto_item_append_text(tree, ", TX Power %d dBm", txpower);
+
+    *offset += 1;
+}
+
+/**
+ *Subdissector for the ZigBee specific Rejoin IE (information element)
+ *
+ *@param tvb pointer to buffer containing raw packet.
+ *@param pinfo pointer to packet information fields (unused).
+ *@param tree pointer to command subtree.
+ *@param offset offset into the tvbuff to begin dissection.
+*/
+static void
+dissect_ieee802154_zigbee_rejoin(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree, guint *offset)
+{
+    proto_tree *subtree;
+
+    subtree = proto_tree_add_subtree(tree, tvb, *offset, 10, ett_zbee_nwk_ie_rejoin, NULL, "ZigBee Rejoin");
+
+    proto_tree_add_item(subtree, hf_ieee802154_zigbee_rejoin_epid, tvb, *offset, 8, ENC_LITTLE_ENDIAN);
+    proto_item_append_text(tree, ", EPID %s", eui64_to_display(wmem_packet_scope(),
+            tvb_get_guint64(tvb, *offset, ENC_LITTLE_ENDIAN)));
+    *offset += 8;
+
+    proto_tree_add_item(subtree, hf_ieee802154_zigbee_rejoin_source_addr, tvb, *offset, 2, ENC_NA);
+    proto_item_append_text(tree, ", Src: 0x%04x",
+            tvb_get_guint16(tvb, *offset, ENC_LITTLE_ENDIAN));
+    *offset += 2;
+
+} /* dissect_ieee802154_zigbee_rejoin */
 
 /**
  *ZigBee protocol registration routine.
@@ -1719,6 +1915,10 @@ void proto_register_zbee_nwk(void)
             { "Status Code",            "zbee_nwk.cmd.status", FT_UINT8, BASE_HEX, VALS(zbee_nwk_status_codes), 0x0,
                 NULL, HFILL }},
 
+            { &hf_zbee_nwk_cmd_nwk_status_command_id,
+            { "Unknown Command ID",     "zbee_nwk.cmd.status.unknown_command_id", FT_UINT8, BASE_HEX,
+                    VALS(zbee_nwk_cmd_names), 0x0, NULL, HFILL }},
+
             { &hf_zbee_nwk_cmd_leave_rejoin,
             { "Rejoin",                 "zbee_nwk.cmd.leave.rejoin", FT_BOOLEAN, 8, NULL,
                 ZBEE_NWK_CMD_LEAVE_OPTION_REJOIN, "Flag instructing the device to rejoin the network.", HFILL }},
@@ -1857,28 +2057,44 @@ void proto_register_zbee_nwk(void)
               ZBEE_NWK_CMD_ED_TIMEO_RSP_PRNT_INFO_ED_TIMOU_REQ_KEEPAL_SUPP,
               NULL, HFILL }},
 
+            { &hf_zbee_nwk_cmd_link_pwr_type,
+            { "Type",        "zbee_nwk.cmd.link_pwr_delta.type", FT_UINT8, BASE_HEX,
+                VALS(zbee_nwk_link_power_delta_types), ZBEE_NWK_CMD_NWK_LINK_PWR_DELTA_TYPE_MASK, NULL, HFILL }},
+
+            { &hf_zbee_nwk_cmd_link_pwr_list_count,
+            { "Structure Count",        "zbee_nwk.cmd.link_pwr_delta.list_count", FT_UINT8, BASE_DEC, NULL, 0x0,
+              NULL, HFILL }},
+
+            { &hf_zbee_nwk_cmd_link_pwr_device_address,
+            { "Device Address",      "zbee_nwk.cmd.link_pwr_delta.address", FT_UINT16, BASE_HEX, NULL,
+                0x0, NULL, HFILL }},
+
+            { &hf_zbee_nwk_cmd_link_pwr_power_delta,
+            { "Power Delta",         "zbee_nwk.cmd.link_pwr_delta.power_delta", FT_INT8, BASE_DEC, NULL, 0x0,
+                    NULL, HFILL }},
+
             { &hf_zbee_beacon_protocol,
             { "Protocol ID",            "zbee_beacon.protocol", FT_UINT8, BASE_DEC, NULL, 0x0,
                 NULL, HFILL }},
 
             { &hf_zbee_beacon_stack_profile,
-            { "Stack Profile",          "zbee_beacon.profile", FT_UINT8, BASE_HEX,
+            { "Stack Profile",          "zbee_beacon.profile", FT_UINT16, BASE_HEX,
                 VALS(zbee_nwk_stack_profiles), ZBEE_NWK_BEACON_STACK_PROFILE, NULL, HFILL }},
 
             { &hf_zbee_beacon_version,
-            { "Protocol Version",       "zbee_beacon.version", FT_UINT8, BASE_DEC, NULL, ZBEE_NWK_BEACON_PROTOCOL_VERSION,
+            { "Protocol Version",       "zbee_beacon.version", FT_UINT16, BASE_DEC, NULL, ZBEE_NWK_BEACON_PROTOCOL_VERSION,
                 NULL, HFILL }},
 
             { &hf_zbee_beacon_router_capacity,
-            { "Router Capacity", "zbee_beacon.router", FT_BOOLEAN, 8, NULL, ZBEE_NWK_BEACON_ROUTER_CAPACITY,
+            { "Router Capacity", "zbee_beacon.router", FT_BOOLEAN, 16, NULL, ZBEE_NWK_BEACON_ROUTER_CAPACITY,
                 "Whether the device can accept join requests from routing capable devices.", HFILL }},
 
             { &hf_zbee_beacon_depth,
-            { "Device Depth",           "zbee_beacon.depth", FT_UINT8, BASE_DEC, NULL, ZBEE_NWK_BEACON_NETWORK_DEPTH,
+            { "Device Depth",           "zbee_beacon.depth", FT_UINT16, BASE_DEC, NULL, ZBEE_NWK_BEACON_NETWORK_DEPTH,
                 "The tree depth of the device, 0 indicates the network coordinator.", HFILL }},
 
             { &hf_zbee_beacon_end_device_capacity,
-            { "End Device Capacity",        "zbee_beacon.end_dev", FT_BOOLEAN, 8, NULL, ZBEE_NWK_BEACON_END_DEVICE_CAPACITY,
+            { "End Device Capacity",        "zbee_beacon.end_dev", FT_BOOLEAN, 16, NULL, ZBEE_NWK_BEACON_END_DEVICE_CAPACITY,
                 "Whether the device can accept join requests from ZigBee end devices.", HFILL }},
 
             { &hf_zbee_beacon_epid,
@@ -1913,12 +2129,38 @@ void proto_register_zbee_nwk(void)
             { "Network ID",           "zbip_beacon.network_id", FT_STRING, BASE_NONE, NULL, 0x0,
                 "A string that uniquely identifies this network.", HFILL }},
 
+            { &hf_ieee802154_zigbee_ie,
+            { "IE header",                       "zbee_nwk.zigbee_ie", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+
+            { &hf_ieee802154_zigbee_ie_id,
+            { "Id",                              "zbee_nwk.zigbee_ie.id", FT_UINT16, BASE_HEX, VALS(ieee802154_zigbee_ie_names),
+                    ZBEE_ZIGBEE_IE_ID_MASK, NULL, HFILL }},
+
+            { &hf_ieee802154_zigbee_ie_length,
+            { "Length",                           "zbee_nwk.zigbee_ie.length", FT_UINT16, BASE_DEC, NULL,
+                    ZBEE_ZIGBEE_IE_LENGTH_MASK, NULL, HFILL }},
+
+            { &hf_ieee802154_zigbee_ie_tx_power,
+            { "Tx Power (dBm)",                  "zbee_nwk.zigbee_ie.tx_power", FT_INT8, BASE_DEC, NULL, 0x0, NULL, HFILL }},
+
+            { &hf_ieee802154_zigbee_ie_source_addr,
+            { "Source Address",                  "zbee_nwk.zigbee_ie.source_address", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+
+
+            { &hf_ieee802154_zigbee_rejoin_epid,
+            { "Extended PAN ID",                "zbee_nwk.zigbee_rejoin.ext_panid", FT_EUI64, BASE_NONE, NULL, 0x0,
+                "Extended PAN identifier", HFILL }},
+
+            { &hf_ieee802154_zigbee_rejoin_source_addr,
+            { "Source Address",                  "zbee_nwk.zigbee_rejoin.source_address", FT_UINT16, BASE_HEX, NULL, 0x0, NULL, HFILL }},
+
+
     };
 
     /*  NWK Layer subtrees */
     static gint *ett[] = {
         &ett_zbee_nwk,
-        &ett_zbee_beacon,
+        &ett_zbee_nwk_beacon,
         &ett_zbee_nwk_fcf,
         &ett_zbee_nwk_fcf_ext,
         &ett_zbee_nwk_mcast,
@@ -1927,7 +2169,13 @@ void proto_register_zbee_nwk(void)
         &ett_zbee_nwk_cmd_options,
         &ett_zbee_nwk_cmd_cinfo,
         &ett_zbee_nwk_cmd_link,
-        &ett_zbee_nwk_cmd_ed_to_rsp_prnt_info
+        &ett_zbee_nwk_cmd_ed_to_rsp_prnt_info,
+        &ett_zbee_nwk_cmd_link_pwr_struct,
+        &ett_zbee_nwk_zigbee_ie_fields,
+        &ett_zbee_nwk_ie_rejoin,
+        &ett_zbee_nwk_header,
+        &ett_zbee_nwk_header_ie,
+        &ett_zbee_nwk_beacon_bitfield,
     };
 
     static ei_register_info ei[] = {
@@ -1946,6 +2194,7 @@ void proto_register_zbee_nwk(void)
     proto_zbee_nwk = proto_register_protocol("ZigBee Network Layer", "ZigBee", ZBEE_PROTOABBREV_NWK);
     proto_zbee_beacon = proto_register_protocol("ZigBee Beacon", "ZigBee Beacon", "zbee_beacon");
     proto_zbip_beacon = proto_register_protocol("ZigBee IP Beacon", "ZigBee IP Beacon", "zbip_beacon");
+    proto_zbee_ie = proto_register_protocol("ZigBee IE", "ZigBee IE", "zbee_ie");
     proto_register_field_array(proto_zbee_nwk, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
 
@@ -1953,6 +2202,7 @@ void proto_register_zbee_nwk(void)
     register_dissector(ZBEE_PROTOABBREV_NWK, dissect_zbee_nwk, proto_zbee_nwk);
     register_dissector("zbee_beacon", dissect_zbee_beacon, proto_zbee_beacon);
     register_dissector("zbip_beacon", dissect_zbip_beacon, proto_zbip_beacon);
+    register_dissector("zbee_ie", dissect_zbee_ie, proto_zbee_ie);
 
     /* Register the Security dissector. */
     zbee_security_register(NULL, proto_zbee_nwk);

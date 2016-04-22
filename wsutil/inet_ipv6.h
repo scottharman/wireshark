@@ -1,4 +1,4 @@
-/* follow_stream_text.h
+/* inet_ipv6.h
  *
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -19,42 +19,41 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef FOLLOW_STREAM_TEXT_H
-#define FOLLOW_STREAM_TEXT_H
+#ifndef __INET_IPV6_H__
+#define __INET_IPV6_H__
 
-#include <QPlainTextEdit>
-
-class FollowStreamText : public QPlainTextEdit
-{
-    Q_OBJECT
-public:
-    explicit FollowStreamText(QWidget *parent = 0);
-
-protected:
-    void mouseMoveEvent(QMouseEvent *event);
-    void mousePressEvent(QMouseEvent *event);
-    void leaveEvent(QEvent *event);
-
-signals:
-    // Perhaps this is not descriptive enough. We should add more words.
-    void mouseMovedToTextCursorPosition(int);
-    void mouseClickedOnTextCursorPosition(int);
-
-public slots:
-
+struct e_in6_addr {
+	guint8   bytes[16];		/**< 128 bit IP6 address */
 };
 
-#endif // FOLLOW_STREAM_TEXT_H
-
-/*
- * Editor modelines
- *
- * Local Variables:
- * c-basic-offset: 4
- * tab-width: 8
- * indent-tabs-mode: nil
- * End:
- *
- * ex: set shiftwidth=4 tabstop=8 expandtab:
- * :indentSize=4:tabSize=8:noTabs=true:
+/**
+ * Unicast Scope
+ * Note that we must check topmost 10 bits only, not 16 bits (see RFC2373).
  */
+#if 0 /* XXX Currently unused */
+static inline gboolean in6_is_addr_link_local(struct e_in6_addr *a) {
+    if ((a->bytes[0] == 0xfe) && ((a->bytes[1] & 0xc0) == 0x80)) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static inline gboolean in6_is_addr_sitelocal(struct e_in6_addr *a) {
+    if ((a->bytes[0] == 0xfe) && ((a->bytes[1] & 0xc0) == 0xc0)) {
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
+/**
+ * Multicast
+ */
+static inline gboolean in6_is_addr_multicast(struct e_in6_addr *a) {
+    if (a->bytes[0] == 0xff) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+#endif

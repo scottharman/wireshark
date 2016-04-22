@@ -2032,12 +2032,12 @@ Achtung: Eine Option MUSS ausgewählt sein.</translation>
         <translation>Anzeigefilterausdruck</translation>
     </message>
     <message>
-        <location filename="display_filter_expression_dialog.cpp" line="187"/>
+        <location filename="display_filter_expression_dialog.cpp" line="189"/>
         <source>Select a field name to get started</source>
         <translation>Einen Feldnamen auswählen um zu starten</translation>
     </message>
     <message>
-        <location filename="display_filter_expression_dialog.cpp" line="191"/>
+        <location filename="display_filter_expression_dialog.cpp" line="193"/>
         <source>Click OK to insert this filter</source>
         <translation>Zum Einfügen dieses Filter OK klicken</translation>
     </message>
@@ -2711,18 +2711,18 @@ für die Filterdateien kann nicht erstellt werden:
 <context>
     <name>FollowStreamDialog</name>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="117"/>
+        <location filename="follow_stream_dialog.cpp" line="123"/>
         <source>Filter Out This Stream</source>
         <oldsource>Hide this stream</oldsource>
         <translation>Diesen Stream filtern</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="120"/>
+        <location filename="follow_stream_dialog.cpp" line="126"/>
         <source>Print</source>
         <translation>Drucken</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="123"/>
+        <location filename="follow_stream_dialog.cpp" line="129"/>
         <source>Save as</source>
         <oldsource>Save as...</oldsource>
         <translation>Speichern als</translation>
@@ -2742,47 +2742,47 @@ für die Filterdateien kann nicht erstellt werden:
         </translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="108"/>
+        <location filename="follow_stream_dialog.cpp" line="114"/>
         <source>ASCII</source>
         <translation>ASCII</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="109"/>
+        <location filename="follow_stream_dialog.cpp" line="115"/>
         <source>C Arrays</source>
         <translation>C Arrays</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="110"/>
+        <location filename="follow_stream_dialog.cpp" line="116"/>
         <source>EBCDIC</source>
         <translation>EBCDIC</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="111"/>
+        <location filename="follow_stream_dialog.cpp" line="117"/>
         <source>Hex Dump</source>
         <translation>Hex Dump</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="112"/>
+        <location filename="follow_stream_dialog.cpp" line="118"/>
         <source>UTF-8</source>
         <translation>UTF-8</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="113"/>
+        <location filename="follow_stream_dialog.cpp" line="119"/>
         <source>YAML</source>
         <translation>YAML</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="114"/>
+        <location filename="follow_stream_dialog.cpp" line="120"/>
         <source>Raw</source>
         <translation>Roh</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="167"/>
+        <location filename="follow_stream_dialog.cpp" line="173"/>
         <source>Packet %1. </source>
         <translation>Paket %1. </translation>
     </message>
     <message numerus="yes">
-        <location filename="follow_stream_dialog.cpp" line="170"/>
+        <location filename="follow_stream_dialog.cpp" line="176"/>
         <source>%Ln &lt;span style=&quot;color: %1; background-color:%2&quot;&gt;client&lt;/span&gt; pkt(s), </source>
         <translation>
             <numerusform>%Ln &lt;span style=&quot;color: %1; background-color:%2&quot;&gt;Client&lt;/span&gt; Paket,</numerusform>
@@ -2790,7 +2790,7 @@ für die Filterdateien kann nicht erstellt werden:
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="follow_stream_dialog.cpp" line="173"/>
+        <location filename="follow_stream_dialog.cpp" line="179"/>
         <source>%Ln &lt;span style=&quot;color: %1; background-color:%2&quot;&gt;server&lt;/span&gt; pkt(s), </source>
         <translation>
             <numerusform>%Ln &lt;span style=&quot;color: %1; background-color:%2&quot;&gt;Server&lt;/span&gt; Paket,</numerusform>
@@ -2798,7 +2798,7 @@ für die Filterdateien kann nicht erstellt werden:
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="follow_stream_dialog.cpp" line="176"/>
+        <location filename="follow_stream_dialog.cpp" line="182"/>
         <source>%Ln turn(s).</source>
         <translation>
             <numerusform>%Ln Runde.</numerusform>
@@ -2806,66 +2806,66 @@ für die Filterdateien kann nicht erstellt werden:
         </translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="179"/>
+        <location filename="follow_stream_dialog.cpp" line="185"/>
         <source> Click to select.</source>
         <translation> Zur Auswahl anklicken.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="259"/>
+        <location filename="follow_stream_dialog.cpp" line="267"/>
         <source>Save Stream Content As</source>
         <translation>Stream Inhalt speichern als</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="524"/>
+        <location filename="follow_stream_dialog.cpp" line="540"/>
         <source>
 [Stream output truncated]</source>
         <translation>
 [Streamausgabe gekürzt]</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="789"/>
+        <location filename="follow_stream_dialog.cpp" line="807"/>
         <source>No capture file.</source>
         <translation>Keine Mitschnittdatei.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="789"/>
+        <location filename="follow_stream_dialog.cpp" line="807"/>
         <source>Please make sure you have a capture file opened.</source>
         <translation>Bitte sicherstellen, dass eine Mitschnittdatei geöffnet ist.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="795"/>
-        <location filename="follow_stream_dialog.cpp" line="801"/>
+        <location filename="follow_stream_dialog.cpp" line="813"/>
+        <location filename="follow_stream_dialog.cpp" line="819"/>
         <source>Error following stream.</source>
         <translation>Fehler beim Folgen des Streams.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="795"/>
+        <location filename="follow_stream_dialog.cpp" line="813"/>
         <source>Capture file invalid.</source>
         <translation>Mitschnittdatei ungültig.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="801"/>
+        <location filename="follow_stream_dialog.cpp" line="819"/>
         <source>Please make sure you have a %1 packet selected.</source>
         <translation>Bitte ein %1 Paket auswählen.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="917"/>
+        <location filename="follow_stream_dialog.cpp" line="935"/>
         <source>Follow %1 Stream (%2)</source>
         <translation>Folge %1 Stream (%2)</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="823"/>
+        <location filename="follow_stream_dialog.cpp" line="841"/>
         <source>Error creating filter for this stream.</source>
         <translation>Fehler beim Erstellen eines Filters für diesen Stream.</translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="824"/>
+        <location filename="follow_stream_dialog.cpp" line="842"/>
         <source>A transport or network layer header is needed.</source>
         <translation>Ein Header der Transport- oder Netzwerkschicht wird benötigt.</translation>
     </message>
     <message numerus="yes">
-        <location filename="follow_stream_dialog.cpp" line="854"/>
-        <location filename="follow_stream_dialog.cpp" line="866"/>
+        <location filename="follow_stream_dialog.cpp" line="872"/>
+        <location filename="follow_stream_dialog.cpp" line="884"/>
         <source>%Ln total stream(s).</source>
         <translation>
             <numerusform>%n Stream.</numerusform>
@@ -2873,7 +2873,7 @@ für die Filterdateien kann nicht erstellt werden:
         </translation>
     </message>
     <message>
-        <location filename="follow_stream_dialog.cpp" line="935"/>
+        <location filename="follow_stream_dialog.cpp" line="955"/>
         <source>File closed.</source>
         <translation>Datei geschlossen.</translation>
     </message>
@@ -4297,22 +4297,22 @@ für die Filterdateien kann nicht erstellt werden:
         <translation>Importieren</translation>
     </message>
     <message>
-        <location filename="import_text_dialog.cpp" line="285"/>
+        <location filename="import_text_dialog.cpp" line="291"/>
         <source>Import Text File</source>
         <translation>Aus einer Textdatei importieren</translation>
     </message>
     <message>
-        <location filename="import_text_dialog.cpp" line="354"/>
+        <location filename="import_text_dialog.cpp" line="360"/>
         <source>Example: %1</source>
         <translation>Beispiel: %1</translation>
     </message>
     <message>
-        <location filename="import_text_dialog.cpp" line="358"/>
+        <location filename="import_text_dialog.cpp" line="364"/>
         <source>&lt;i&gt;(Wrong date format)&lt;/i&gt;</source>
         <translation>&lt;i&gt;(Falsches Datenformat)&lt;/i&gt;</translation>
     </message>
     <message>
-        <location filename="import_text_dialog.cpp" line="362"/>
+        <location filename="import_text_dialog.cpp" line="368"/>
         <source>&lt;i&gt;(No format will be applied)&lt;/i&gt;</source>
         <translation>&lt;i&gt;(Kein Format wird angewendet)&lt;/i&gt;</translation>
     </message>
@@ -9280,24 +9280,28 @@ text-decoration: underline;
     </message>
     <message>
         <location filename="main_window.cpp" line="1576"/>
-        <source>Stop and Quit without Saving</source>
-        <translation>Stoppen und beenden ohne zu speichern</translation>
+        <source>Stop and Quit &amp;without Saving</source>
+        <oldsource>Stop and Quit without Saving</oldsource>
+        <translation>Stoppen und beenden &amp;ohne zu speichern</translation>
     </message>
     <message>
         <location filename="main_window.cpp" line="1588"/>
-        <source>Quit without Saving</source>
-        <translation>Ohne speichern beenden</translation>
+        <source>Quit &amp;without Saving</source>
+        <oldsource>Quit without Saving</oldsource>
+        <translation>&amp;Ohne speichern beenden</translation>
     </message>
     <message>
         <location filename="main_window.cpp" line="1579"/>
         <location filename="main_window.cpp" line="1592"/>
-        <source>Continue without Saving</source>
-        <translation>Fortsetzen ohne zu Speichern</translation>
+        <source>Continue &amp;without Saving</source>
+        <oldsource>Continue without Saving</oldsource>
+        <translation>Fortsetzen &amp;ohne zu Speichern</translation>
     </message>
     <message>
         <location filename="main_window.cpp" line="1582"/>
-        <source>Stop and Continue without Saving</source>
-        <translation>Stoppen und Fortsetzen ohne zu Speichern</translation>
+        <source>Stop and Continue &amp;without Saving</source>
+        <oldsource>Stop and Continue without Saving</oldsource>
+        <translation>Stoppen und Fortsetzen &amp;ohne zu Speichern</translation>
     </message>
     <message>
         <location filename="main_window.cpp" line="1913"/>
@@ -9345,32 +9349,32 @@ text-decoration: underline;
         <translation>Menüeinträge löschen</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1489"/>
+        <location filename="main_window_slots.cpp" line="1495"/>
         <source>Please wait while Wireshark is initializing</source>
         <translation>Bitte Warten während Wireshark initialisiert wird</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1570"/>
+        <location filename="main_window_slots.cpp" line="1576"/>
         <source> before closing the file</source>
         <translation>vor dem Schließen der Datei</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1653"/>
+        <location filename="main_window_slots.cpp" line="1659"/>
         <source>Export Selected Packet Bytes</source>
         <translation>Ausgewählte Paketbytes exportieren</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1719"/>
+        <location filename="main_window_slots.cpp" line="1725"/>
         <source>No Keys</source>
         <translation>Keine Schlüssel</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1720"/>
+        <location filename="main_window_slots.cpp" line="1726"/>
         <source>There are no SSL Session Keys to save.</source>
         <translation>Es sind keine SSL Sitzungsschlüssel zum Speichern vorhanden.</translation>
     </message>
     <message numerus="yes">
-        <location filename="main_window_slots.cpp" line="1726"/>
+        <location filename="main_window_slots.cpp" line="1732"/>
         <source>Export SSL Session Keys (%Ln key(s))</source>
         <oldsource>Export SSL Session Keys (%1 key%2</oldsource>
         <translation>
@@ -9379,69 +9383,69 @@ text-decoration: underline;
         </translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1655"/>
+        <location filename="main_window_slots.cpp" line="1661"/>
         <source>Raw data (*.bin *.dat *.raw);;All Files (</source>
         <translation>Rohdaten (*.bin *.dat *.raw);; Alle Dateien (</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1730"/>
+        <location filename="main_window_slots.cpp" line="1736"/>
         <source>SSL Session Keys (*.keys *.txt);;All Files (</source>
         <translation>SSL Sitzungsschlüssel (*.keys *.txt);; Alle Dateien (</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="1868"/>
+        <location filename="main_window_slots.cpp" line="1874"/>
         <source>Couldn&apos;t copy text. Try another item.</source>
         <translation>Text konnte nicht kopiert werden. Probieren sie einen anderen Eintrag.</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="2277"/>
-        <location filename="main_window_slots.cpp" line="3365"/>
+        <location filename="main_window_slots.cpp" line="2283"/>
+        <location filename="main_window_slots.cpp" line="3371"/>
         <source>Unable to build conversation filter.</source>
         <translation>Verbindungsfilter kann nicht erstellt werden.</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="2422"/>
-        <location filename="main_window_slots.cpp" line="2435"/>
+        <location filename="main_window_slots.cpp" line="2428"/>
+        <location filename="main_window_slots.cpp" line="2441"/>
         <source> before reloading the file</source>
         <translation>vor dem Neuladen der Datei</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="2469"/>
+        <location filename="main_window_slots.cpp" line="2475"/>
         <source>No filter available. Try another </source>
         <translation>Kein Filter verfügbar. Probieren Sie einen anderen.</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3372"/>
+        <location filename="main_window_slots.cpp" line="3378"/>
         <source>Error compiling filter for this conversation.</source>
         <translation>Fehler beim Erstellen eines Filters für diese Verbindung.</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3381"/>
+        <location filename="main_window_slots.cpp" line="3387"/>
         <source>No previous/next packet in conversation.</source>
         <translation>Kein vorheriges/nächstes Paket in dieser Verbindung.</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3458"/>
+        <location filename="main_window_slots.cpp" line="3464"/>
         <source>No Interface Selected</source>
         <translation>Kein Interface ausgewählt</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3465"/>
+        <location filename="main_window_slots.cpp" line="3471"/>
         <source> before starting a new capture</source>
         <translation>vor dem Starten einer neuen Aufzeichnung</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3483"/>
+        <location filename="main_window_slots.cpp" line="3489"/>
         <source> before restarting the capture</source>
         <translation>vor dem Neustart der Aufzeichnung</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3686"/>
+        <location filename="main_window_slots.cpp" line="3692"/>
         <source>Wiki Page for %1</source>
         <translation>Wikiseite für &amp;1</translation>
     </message>
     <message>
-        <location filename="main_window_slots.cpp" line="3687"/>
+        <location filename="main_window_slots.cpp" line="3693"/>
         <source>&lt;p&gt;The Wireshark Wiki is maintained by the community.&lt;/p&gt;&lt;p&gt;The page you are about to load might be wonderful, incomplete, wrong, or nonexistent.&lt;/p&gt;&lt;p&gt;Proceed to the wiki?&lt;/p&gt;</source>
         <translation>&lt;p&gt;Das Wireshark Wiki wird durch die Community gepflegt.&lt;/p&gt;&lt;p&gt;Die Seite, die aufgerufen werden soll, kann wundervoll, unvollständig, falsch oder gar nicht vorhanden sein.&lt;/p&gt;&lt;p&gt;Zum Wiki geheni?&lt;/p&gt;</translation>
     </message>

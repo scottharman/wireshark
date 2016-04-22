@@ -276,6 +276,7 @@ static int hf_rtps_encapsulation_kind                           = -1;
 static int hf_rtps_octets_to_inline_qos                         = -1;
 static int hf_rtps_filter_signature                             = -1;
 static int hf_rtps_bitmap                                       = -1;
+static int hf_rtps_acknack_analysis                             = -1;
 static int hf_rtps_property_name                                = -1;
 static int hf_rtps_property_value                               = -1;
 static int hf_rtps_union                                        = -1;
@@ -352,6 +353,9 @@ static int hf_rtps_flag_participant_state_announcer             = -1;
 static int hf_rtps_flag_participant_state_detector              = -1;
 static int hf_rtps_flag_participant_message_datawriter          = -1;
 static int hf_rtps_flag_participant_message_datareader          = -1;
+
+static int hf_rtps_sm_rti_crc_number                            = -1;
+static int hf_rtps_sm_rti_crc_result                            = -1;
 
 /* Subtree identifiers */
 static gint ett_rtps                            = -1;
@@ -559,6 +563,10 @@ static const value_string submessage_id_valsv2[] = {
   { 0, NULL }
 };
 
+static const value_string submessage_id_rti[] = {
+  { SUBMESSAGE_RTI_CRC,           "RTI_CRC" },
+  { 0, NULL }
+};
 
 #if 0
 static const value_string typecode_kind_vals[] = {
@@ -1126,6 +1134,17 @@ static const int* INFO_REPLY_FLAGS[] = {
   NULL
 };
 
+static const int * RTI_CRC_FLAGS[] = {
+  &hf_rtps_flag_reserved80,                     /* Bit 7 */
+  &hf_rtps_flag_reserved40,                     /* Bit 6 */
+  &hf_rtps_flag_reserved20,                     /* Bit 5 */
+  &hf_rtps_flag_reserved10,                     /* Bit 4 */
+  &hf_rtps_flag_reserved08,                     /* Bit 3 */
+  &hf_rtps_flag_reserved04,                     /* Bit 2 */
+  &hf_rtps_flag_reserved02,                     /* Bit 1 */
+  &hf_rtps_flag_endianness,                     /* Bit 0 */
+  NULL
+};
 /* It is a 4 bytes field but with these 8 bits is enough */
 static const int* STATUS_INFO_FLAGS[] = {
   &hf_rtps_flag_reserved80,                     /* Bit 7 */
@@ -2738,27 +2757,49 @@ static int rtps_util_add_bitmap(proto_tree *tree,
                         tvbuff_t *tvb,
                         gint       offset,
                         gboolean   little_endian,
-                        const char *label _U_) {
+                        const char *label) {
   gint32 num_bits;
   guint32 data;
   wmem_strbuf_t *temp_buff = wmem_strbuf_new_label(wmem_packet_scope());
-  int i, j, idx;
+  wmem_strbuf_t *analysis_buff = wmem_strbuf_new_label(wmem_packet_scope());
+  gint i, j, idx;
   gchar *last_one;
-  proto_item *ti;
+  proto_item *ti = NULL, *ti_tree = NULL;
   proto_tree *bitmap_tree;
   const gint original_offset = offset;
   guint32 datamask;
+  guint64 first_seq_number;
+  gboolean first_nack = TRUE;
 
-  bitmap_tree = proto_tree_add_subtree(tree, tvb, original_offset, offset-original_offset, ett_rtps_bitmap, &ti, label);
+  bitmap_tree = proto_tree_add_subtree(tree, tvb, original_offset, offset-original_offset,
+          ett_rtps_bitmap, &ti_tree, label);
 
   /* Bitmap base sequence number */
-  rtps_util_add_seq_number(bitmap_tree, tvb, offset, little_endian, "bitmapBase");
+  first_seq_number = rtps_util_add_seq_number(bitmap_tree, tvb, offset, little_endian, "bitmapBase");
   offset += 8;
 
   /* Reads the bitmap size */
   num_bits = NEXT_guint32(tvb, offset, little_endian);
   proto_tree_add_uint(bitmap_tree, hf_rtps_bitmap_num_bits, tvb, offset, 4, num_bits);
   offset += 4;
+  /* bitmap base 0 means that this is a preemptive ACKNACK */
+  if (first_seq_number == 0) {
+    ti = proto_tree_add_uint_format(bitmap_tree, hf_rtps_acknack_analysis, tvb, 0, 0,
+        1, "Acknack Analysis: Preemptive ACKNACK");
+    PROTO_ITEM_SET_GENERATED(ti);
+  }
+
+  if (first_seq_number > 0 && num_bits == 0) {
+    ti = proto_tree_add_uint_format(bitmap_tree, hf_rtps_acknack_analysis, tvb, 0, 0,
+            2, "Acknack Analysis: Expecting sample %" G_GINT64_MODIFIER "u", first_seq_number);
+    PROTO_ITEM_SET_GENERATED(ti);
+  }
+
+  if (num_bits > 0) {
+    ti = proto_tree_add_uint_format(bitmap_tree, hf_rtps_acknack_analysis, tvb, 0, 0,
+            3, "Acknack Analysis: Lost samples");
+    PROTO_ITEM_SET_GENERATED(ti);
+  }
 
   /* Reads the bits (and format the print buffer) */
   idx = 0;
@@ -2768,6 +2809,12 @@ static int rtps_util_add_bitmap(proto_tree *tree,
     for (j = 0; j < 32; ++j) {
       datamask = (1U << (31-j));
       wmem_strbuf_append_c(temp_buff, ((data & datamask) == datamask) ? '1':'0');
+      if ((data & datamask) == datamask) {
+        proto_item_append_text(ti,
+                first_nack ? " %" G_GINT64_MODIFIER "u" : ", %" G_GINT64_MODIFIER "u",
+                first_seq_number + idx);
+        first_nack = FALSE;
+      }
       ++idx;
       if ((idx >= num_bits) || (wmem_strbuf_get_len(temp_buff) >= (ITEM_LABEL_LENGTH - 1))) {
         break;
@@ -2782,11 +2829,19 @@ static int rtps_util_add_bitmap(proto_tree *tree,
   }
 
   if (wmem_strbuf_get_len(temp_buff) > 0) {
-    proto_tree_add_bytes_format_value(bitmap_tree, hf_rtps_bitmap, tvb, original_offset + 12, offset - original_offset - 12,
-                                       NULL, "%s", wmem_strbuf_get_str(temp_buff));
+    proto_tree_add_bytes_format_value(bitmap_tree, hf_rtps_bitmap, tvb,
+            original_offset + 12, offset - original_offset - 12,
+            NULL, "%s", wmem_strbuf_get_str(temp_buff));
   }
 
-  proto_item_set_len(ti, offset-original_offset);
+  proto_item_set_len(ti_tree, offset-original_offset);
+
+  /* Add analysis of the information */
+  if (num_bits > 0) {
+    proto_item_append_text(ti, "%s in range [%" G_GINT64_MODIFIER "u,%" G_GINT64_MODIFIER "u]",
+        wmem_strbuf_get_str(analysis_buff), first_seq_number, first_seq_number + num_bits - 1);
+  }
+
   return offset;
 }
 
@@ -3041,7 +3096,6 @@ static gboolean dissect_parameter_sequence_rti(proto_tree *rtps_parameter_tree, 
     case PID_DEFAULT_MULTICAST_LOCATOR: {
       ENSURE_LENGTH(24);
       rtps_util_add_locator_t(rtps_parameter_tree, pinfo, tvb, offset, little_endian, "locator");
-
       break;
     }
 
@@ -5904,11 +5958,7 @@ static void dissect_ACKNACK(tvbuff_t *tvb, packet_info *pinfo, gint offset, guin
 
   proto_tree_add_bitmask_value(tree, tvb, offset + 1, hf_rtps_sm_flags, ett_rtps_flags, ACKNACK_FLAGS, flags);
 
-  octet_item = proto_tree_add_item(tree,
-                        hf_rtps_sm_octets_to_next_header,
-                        tvb,
-                        offset + 2,
-                        2,
+  octet_item = proto_tree_add_item(tree, hf_rtps_sm_octets_to_next_header, tvb, offset + 2, 2,
                         little_endian ? ENC_LITTLE_ENDIAN : ENC_BIG_ENDIAN);
 
   if (octets_to_next_header < 20) {
@@ -5920,36 +5970,17 @@ static void dissect_ACKNACK(tvbuff_t *tvb, packet_info *pinfo, gint offset, guin
   original_offset = offset;
 
   /* readerEntityId */
-  rtps_util_add_entity_id(tree,
-                        tvb,
-                        offset,
-                        hf_rtps_sm_rdentity_id,
-                        hf_rtps_sm_rdentity_id_key,
-                        hf_rtps_sm_rdentity_id_kind,
-                        ett_rtps_rdentity,
-                        "readerEntityId",
-                        NULL);
+  rtps_util_add_entity_id(tree, tvb, offset, hf_rtps_sm_rdentity_id, hf_rtps_sm_rdentity_id_key,
+                        hf_rtps_sm_rdentity_id_kind, ett_rtps_rdentity, "readerEntityId", NULL);
   offset += 4;
 
   /* writerEntityId */
-  rtps_util_add_entity_id(tree,
-                        tvb,
-                        offset,
-                        hf_rtps_sm_wrentity_id,
-                        hf_rtps_sm_wrentity_id_key,
-                        hf_rtps_sm_wrentity_id_kind,
-                        ett_rtps_wrentity,
-                        "writerEntityId",
-                        NULL);
+  rtps_util_add_entity_id(tree, tvb, offset, hf_rtps_sm_wrentity_id, hf_rtps_sm_wrentity_id_key,
+                        hf_rtps_sm_wrentity_id_kind, ett_rtps_wrentity, "writerEntityId", NULL);
   offset += 4;
 
   /* Bitmap */
-  offset = rtps_util_add_bitmap(tree,
-                        tvb,
-                        offset,
-                        little_endian,
-                        "readerSNState");
-
+  offset = rtps_util_add_bitmap(tree, tvb, offset, little_endian, "readerSNState");
 
   /* RTPS 1.0 didn't have count: make sure we don't decode it wrong
    * in this case
@@ -7529,8 +7560,6 @@ static void dissect_INFO_DST(tvbuff_t *tvb, packet_info *pinfo, gint offset, gui
   }
 }
 
-
-
 /* *********************************************************************** */
 /* *                        I N F O _ R E P L Y                          * */
 /* *********************************************************************** */
@@ -7585,6 +7614,40 @@ static void dissect_INFO_REPLY(tvbuff_t *tvb, packet_info *pinfo, gint offset, g
   }
 }
 
+/* *********************************************************************** */
+/* *                              RTI CRC                                * */
+/* *********************************************************************** */
+static void dissect_RTI_CRC(tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 flags,
+        gboolean little_endian, gint octets_to_next_header,proto_tree *tree) {
+   /*
+    * 0...2...........7...............15.............23...............31
+    * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    * |   RTI_CRC     |X|X|X|X|X|X|X|E|      octetsToNextHeader       |
+    * +---------------+---------------+---------------+---------------+
+    * |        RTPS Message length (without the 20 bytes header)      |
+    * +---------------+---------------+---------------+---------------+
+    * |                             CRC32                             |
+    * +---------------+---------------+---------------+---------------+
+      Total 12 bytes */
+   proto_item *octet_item;
+
+   proto_tree_add_bitmask_value(tree, tvb, offset + 1, hf_rtps_sm_flags, ett_rtps_flags, RTI_CRC_FLAGS, flags);
+
+   octet_item = proto_tree_add_item(tree, hf_rtps_sm_octets_to_next_header, tvb,
+                         offset + 2, 2, little_endian ? ENC_LITTLE_ENDIAN : ENC_BIG_ENDIAN);
+
+   if (octets_to_next_header != 8) {
+     expert_add_info_format(pinfo, octet_item, &ei_rtps_sm_octets_to_next_header_error, "(Error: should be == 8)");
+     return;
+   }
+
+   offset += 4;
+   proto_tree_add_item(tree, hf_rtps_sm_rti_crc_number, tvb, offset, 4,
+           little_endian ? ENC_LITTLE_ENDIAN : ENC_BIG_ENDIAN);
+
+   offset += 4;
+      proto_tree_add_item(tree, hf_rtps_sm_rti_crc_result, tvb, offset, 4, ENC_BIG_ENDIAN);
+}
 static gboolean dissect_rtps_submessage_v2(tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 flags,
                                            gboolean little_endian, guint8 submessageId, guint16 vendor_id, gint octets_to_next_header,
                                            proto_tree *rtps_submessage_tree, proto_item *submessage_item,
@@ -7646,6 +7709,12 @@ static gboolean dissect_rtps_submessage_v2(tvbuff_t *tvb, packet_info *pinfo, gi
                                 rtps_submessage_tree, vendor_id, guid);
       break;
 
+    case SUBMESSAGE_RTI_CRC:
+      if (vendor_id == RTPS_VENDOR_RTI_DDS) {
+        dissect_RTI_CRC(tvb, pinfo, offset, flags, little_endian, octets_to_next_header,
+                                rtps_submessage_tree);
+      }
+      break;
     default:
       return FALSE;
   }
@@ -7880,16 +7949,26 @@ static gboolean dissect_rtps(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree
       sub_hf = hf_rtps_sm_id;
       sub_vals = submessage_id_vals;
     } else {
-      sub_hf = hf_rtps_sm_idv2;
-      sub_vals = submessage_id_valsv2;
+      if ((submessageId & 0x80) && (vendor_id == RTPS_VENDOR_RTI_DDS)) {
+        sub_hf = hf_rtps_sm_idv2;
+        sub_vals = submessage_id_rti;
+      } else {
+        sub_hf = hf_rtps_sm_idv2;
+        sub_vals = submessage_id_valsv2;
+      }
     }
 
     col_append_sep_str(pinfo->cinfo, COL_INFO, ", ", val_to_str(submessageId, sub_vals, "Unknown[%02x]"));
 
     /* Creates the subtree 'Submessage: XXXX' */
     if (submessageId & 0x80) {
-      ti = proto_tree_add_uint_format_value(rtps_tree, sub_hf, tvb, offset, 1,
-                              submessageId, "Vendor-specific (0x%02x)", submessageId);
+      if (vendor_id == RTPS_VENDOR_RTI_DDS) {
+        ti = proto_tree_add_uint_format_value(rtps_tree, sub_hf, tvb, offset, 1, submessageId, "%s",
+                val_to_str(submessageId, submessage_id_rti, "Vendor-specific (0x%02x)"));
+      } else {
+        ti = proto_tree_add_uint_format_value(rtps_tree, sub_hf, tvb, offset, 1,
+                submessageId, "Vendor-specific (0x%02x)", submessageId);
+      }
     } else {
       ti = proto_tree_add_uint(rtps_tree, sub_hf, tvb, offset, 1, submessageId);
     }
@@ -9232,6 +9311,12 @@ void proto_register_rtps(void) {
         NULL, HFILL }
     },
 
+    { &hf_rtps_acknack_analysis,
+      { "Acknack Analysis", "rtps.sm.acknack_analysis",
+        FT_UINT32, BASE_DEC, NULL, 0,
+        NULL, HFILL }
+    },
+
     { &hf_rtps_param_partition_num,
       { "Size", "rtps.param.partition_num",
         FT_INT32, BASE_DEC, NULL, 0,
@@ -9457,6 +9542,16 @@ void proto_register_rtps(void) {
     { &hf_rtps_serialized_data, {
         "serializedData", "rtps.serialized_data",
         FT_BYTES, BASE_NONE, NULL, 0, NULL, HFILL }
+    },
+
+    { &hf_rtps_sm_rti_crc_number, {
+        "RTPS Message Length (no header)", "rtps.sm.rti_crc.message_length",
+        FT_UINT32, BASE_DEC, NULL, 0, NULL, HFILL }
+    },
+
+    { &hf_rtps_sm_rti_crc_result, {
+        "CRC", "rtps.sm.rti_crc",
+        FT_UINT32, BASE_HEX, NULL, 0, NULL, HFILL }
     },
 
     /* Flag bits */

@@ -249,7 +249,6 @@ if( CMAKE_C_COMPILER_ID MATCHES "MSVC")
 		/DWIN32_LEAN_AND_MEAN
 		"/DMSC_VER_REQUIRED=${MSC_VER_REQUIRED}"
 		/D_CRT_SECURE_NO_DEPRECATE
-		/D_CRT_NONSTDC_NO_DEPRECATE
 		# NOMINMAX keeps windows.h from defining "min" and "max" via windef.h.
 		# This avoids conflicts with the C++ standard library.
 		/DNOMINMAX
@@ -346,7 +345,6 @@ else()
 		-Wextra
 		-Wendif-labels
 		-Wpointer-arith
-		-Warray-bounds
 		-Wformat-security
 		-fwrapv
 		-fno-strict-overflow
@@ -588,9 +586,14 @@ if( NOT CMAKE_C_COMPILER_ID MATCHES "MSVC")
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-	set (C_UNUSED "__attribute__((unused))" )
+	set (C_UNUSED	    "__attribute__((unused))" )
+	set (WS_NORETURN    "__attribute__((noreturn))")
+elseif(MSVC)
+	set (C_UNUSED	    "")
+	set (WS_NORETURN    "__declspec(noreturn)")
 else()
-	set (C_UNUSED "" )
+	set (C_UNUSED	    "")
+	set (WS_NORETURN    "")
 endif()
 
 set(WIRESHARK_LD_FLAGS
@@ -653,8 +656,6 @@ set(YACC_REQUIRED TRUE)
 if (NOT WIN32)
 	set(M_REQUIRED TRUE)
 endif()
-
-set(PACKAGELIST ${PACKAGELIST} HtmlViewer)
 
 set(PACKAGELIST ${PACKAGELIST} LIBSSH)
 set(LIBSSH_OPTIONS "0.6")
@@ -812,8 +813,6 @@ foreach(PACKAGE ${PACKAGELIST})
 		set(PACKAGE_VAR "PYTHONINTERP")
 	elseif(${PACKAGE} STREQUAL "Gettext")
 		set(PACKAGE_VAR "GETTEXT")
-	elseif(${PACKAGE} STREQUAL "HtmlViewer")
-		set(PACKAGE_VAR "HTML_VIEWER")
 	elseif(${PACKAGE} STREQUAL "Perl")
 		set(PACKAGE_VAR "PERL")
 	else()
@@ -1144,14 +1143,10 @@ gmx_test_large_files(GMX_LARGEFILES)
 add_definitions( -DTOP_SRCDIR=\"${CMAKE_SOURCE_DIR}\" )
 
 if(WIN32)
-	set(WS_MSVC_NORETURN "__declspec(noreturn)")
-
 	# Disable deprecation
 	if(MSVC80 OR MSVC90)
 		add_definitions(-D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE)
 	endif()
-else()
-	set(WS_MSVC_NORETURN " ")
 endif()
 
 if (${GIT_EXECUTABLE})

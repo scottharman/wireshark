@@ -26,7 +26,7 @@
 
 #include <glib.h>
 
-#include <epan/ipv6.h>
+#include "inet_ipv6.h"
 
 WS_DLL_PUBLIC const gchar *
 ws_inet_ntop4(gconstpointer src, gchar *dst, guint dst_size);

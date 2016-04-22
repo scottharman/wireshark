@@ -52,7 +52,8 @@ AC_DEFINE(VERSION_MAJOR, version_major, [Wireshark's major version])
 AC_DEFINE(VERSION_MINOR, version_minor, [Wireshark's minor version])
 AC_DEFINE(VERSION_MICRO, version_micro, [Wireshark's micro version])
 
-AC_DEFINE(VERSION_FLAVOR, "Development Build", [Wireshark's package flavor])
+AC_DEFINE_UNQUOTED(VERSION_FLAVOR,
+	["${WIRESHARK_VERSION_FLAVOR:-"Development Build"}"], [Wireshark's package flavor])
 
 LT_PREREQ([2.2.2])
 LT_INIT([disable-static dlopen])
@@ -187,41 +188,6 @@ then
 	# The alternative is not to build the HTML man pages....
 	#
 	AC_MSG_ERROR(I couldn't find pod2html; make sure it's installed and in your path)
-fi
-
-#
-# Checks for programs used by Wireshark/TShark/etc.
-#
-
-#
-# XXX - this looks for various HTML viewers on the host, not the target;
-# we really want to know what's available on the target, for cross-builds.
-# That would probably require us to, at run time, look for xdg-open and,
-# if we don't find it, look for mozilla, htmlview, etc.
-#
-AC_PATH_PROG(HTML_VIEWER, xdg-open)
-if test "x$HTML_VIEWER" != x
-then
-	#
-	# XXX - the HTML_VIEWER shell variable is the full path of xdg-open.
-	# Define some variable to be that, so we just run that?
-	#
-	AC_DEFINE(HAVE_XDG_OPEN, 1, [Define if we have xdg-open])
-
-	#
-	# XXX - we have to define HTML_VIEWER for the prefs.c code that
-	# sets the default value of the Web browser preference, even
-	# though that preference won't be offered.
-	#
-	AC_DEFINE_UNQUOTED(HTML_VIEWER, "xdg-open", [HTML viewer, e.g. mozilla])
-else
-	AC_PATH_PROG(HTML_VIEWER, htmlview)
-	if test "x$HTML_VIEWER" = x
-	then
-		AC_DEFINE_UNQUOTED(HTML_VIEWER, "mozilla", [HTML viewer, e.g. mozilla])
-	else
-		AC_DEFINE_UNQUOTED(HTML_VIEWER, "htmlview", [HTML viewer, e.g. mozilla])
-	fi
 fi
 
 #
@@ -544,18 +510,19 @@ AX_LIB_SOCKET_NSL
 #
 AC_ARG_WITH([qt],
   AC_HELP_STRING( [--with-qt=@<:@yes/no/4/5@:>@],
-		  [use Qt @<:@default=yes@:>@]),
+		  [use Qt @<:@default=yes, if available@:>@]),
   with_qt="$withval", with_qt="unspecified")
 
-AC_ARG_WITH([gtk2],
-  AC_HELP_STRING( [--with-gtk2=@<:@yes/no@:>@],
-		  [use GTK+ 2.0 @<:@default=no@:>@]),
-  with_gtk2="$withval", with_gtk2="unspecified")
-
-AC_ARG_WITH([gtk3],
-  AC_HELP_STRING( [--with-gtk3=@<:@yes/no@:>@],
-		  [use GTK+ 3.0 instead of 2.0 @<:@default=yes@:>@]),
-  with_gtk3="$withval", with_gtk3="unspecified")
+AC_ARG_WITH([gtk],
+  AC_HELP_STRING( [--with-gtk=@<:@yes/no/2/3@:>@],
+	[use GTK+ @<:@default=yes, if available@:>@]),
+	AS_CASE([$withval],
+	  [yes], [with_gtk="3 2 fail"],
+	  [no],  [with_gtk="no"],
+	  [3],   [with_gtk="3 fail3"],
+	  [2],   [with_gtk="2 fail2"],
+	  [AC_MSG_ERROR([--with-gtk must be one of yes/no/2/3])]),
+	with_gtk="3 2")
 
 # GnuTLS
 # Version 3.0 switched from LGPLv2.1+ to LGPLv3+, then switched back to
@@ -866,7 +833,6 @@ AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wall)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wextra)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wendif-labels)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wpointer-arith)
-AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Warray-bounds)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wformat-security)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-fwrapv)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-fno-strict-overflow)
@@ -881,22 +847,6 @@ AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wno-overlength-strings)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wno-long-long)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wheader-guard)
 AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wunused-const-variable)
-#
-# Either the version of clang on the "clang code analysis" buildbot is
-# horribly broken, or the header files on that buildbot are horribly
-# broken, as the perfectly-legitimate statement
-#
-#	if( strcmp(argv[i],"--")==0 ) dashdash = 1;
-#
-# is getting stoopid "array index 3 is past the end of the array (which
-# contains 3 elements)" complaints from the compiler.
-#
-# The macro for strcmp() in glibc(?) really seems to give C compilers
-# conniptions; I think I've seen crap from GCC as well with that macro.
-#
-# So, alas, suppress the compile-time array bounds checks.
-#
-AC_WIRESHARK_COMPILER_FLAGS_CHECK(-Wnoarray-bounds)
 #
 # The following are C only, not C++
 #
@@ -1238,8 +1188,10 @@ AC_SUBST(CFLAGS_SSE42)
 #
 if test "x$GCC" = "xyes" -o "x$CC" = "xclang" ; then
   AC_DEFINE(_U_, __attribute__((unused)), [Hint to the compiler that a function parameters is not used])
+  AC_DEFINE(WS_NORETURN, __attribute((noreturn)), [Hint to the compiler that a function never returns])
 else
   AC_DEFINE(_U_, , [Hint to the compiler that a function parameters is not used])
+  AC_DEFINE(WS_NORETURN, , [Hint to the compiler that a function never returns])
 fi
 
 # If we're running GCC or CLang, use FORTIFY_SOURCE=2
@@ -1279,9 +1231,11 @@ AC_ARG_ENABLE(warnings-as-errors,
     with_warnings_as_errors="no"
     AC_MSG_RESULT(no)
   fi
-]
-)
-AM_CONDITIONAL(HAVE_WARNINGS_AS_ERRORS, test "x$with_warnings_as_errors" = "xyes")
+])
+
+AS_IF([test "x$with_warnings_as_errors" = "xyes"], [WERROR="-Werror"], [WERROR=""])
+AC_SUBST(WERROR)
+AM_CONDITIONAL(HAVE_WARNINGS_AS_ERRORS, [test "x$with_warnings_as_errors" = "xyes"])
 
 #
 # Add any platform-specific compiler flags needed.
@@ -1587,24 +1541,6 @@ AC_SUBST(QT_MIN_VERSION)
 have_qt=no
 have_gtk=no
 if test "x$enable_wireshark" = "xyes"; then
-	if test "x$with_gtk2" = "xunspecified" -a \
-		"x$with_gtk3" = "xunspecified" -a \
-		"x$with_qt" = "xunspecified"; then
-		#
-		# No GUI toolkits were explicitly specified; pick Qt
-		# and GTK+ 3.
-		#
-		with_qt=yes
-		with_gtk3=yes
-	elif test "x$with_gtk2" = "xunspecified" -a \
-		  "x$with_gtk3" = "xunspecified" -a \
-		  "x$with_qt" = "xno"; then
-		#
-		# Qt was explicitly disabled, and neither GTK+ 2 nor
-		# GTK+ 3 were explicitly specified; pick GTK+ 3.
-		#
-		with_gtk3=yes
-	fi
 	if test "x$with_qt" != "xno"; then
 		#
 		# Qt was specified; make sure we have a C++ compiler.
@@ -1702,41 +1638,34 @@ if test "x$enable_wireshark" = "xyes"; then
 		])
 	fi
 
-	if test "x$with_gtk3" = "xyes"; then
-		#
-		# GTK+ 3 was specified; make sure they didn't also
-		# specify GTK+ 2, as we don't support building both
-		# GTK+ 2 and GTK+ 3 versions at the same time.
-		#
-		if test "x$with_gtk2" = "xyes"; then
-			AC_MSG_ERROR([Both GTK+ 2 and GTK+ 3 were specified; choose one but not both])
-		fi
-
-		#
-		# Make sure we have GTK+ 3.
-		#
-		PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GTK],
+	for want_gtk_version in $with_gtk; do
+		AS_CASE([$want_gtk_version],
+		  [3], [PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GTK],
 			[gtk+-3.0 >= $GTK3_MIN_VERSION glib-2.0 >= $GLIB_MIN_VERSION gthread-2.0 >= $GLIB_MIN_VERSION gmodule-2.0 >= $GLIB_MIN_VERSION],
 			[
-				have_gtk=yes
-				GTK_VERSION=`$PKG_CONFIG --modversion gtk+-3.0`
-				GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk3"
+			  have_gtk=yes
+			  GTK_VERSION=`$PKG_CONFIG --modversion gtk+-3.0`
+			  GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk=3"
 			],
-			[AC_MSG_ERROR([GTK+ 3 is not available])])
-	elif test "x$with_gtk2" = "xyes"; then
-		#
-		# GTK+ 3 wasn't specified, and GTK+ 2 was specified;
-		# make sure we have GTK+ 2.
-		#
-		PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GTK],
+			[
+			  :
+			])],
+		  [2], [PKG_WIRESHARK_CHECK_SYSTEM_MODULES([GTK],
 			[gtk+-2.0 >= $GTK2_MIN_VERSION glib-2.0 >= $GLIB_MIN_VERSION gthread-2.0 >= $GLIB_MIN_VERSION gmodule-2.0 >= $GLIB_MIN_VERSION],
 			[
-				have_gtk=yes
-				GTK_VERSION=`$PKG_CONFIG --modversion gtk+-2.0`
-				GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk2"
+			  have_gtk=yes
+			  GTK_VERSION=`$PKG_CONFIG --modversion gtk+-2.0`
+			  GUI_CONFIGURE_FLAGS="$GUI_CONFIGURE_FLAGS --with-gtk=2"
 			],
-			[AC_MSG_ERROR([GTK+ 2 is not available])])
-	fi
+			[
+			  :
+			])],
+		  [fail3], [AC_MSG_ERROR([GTK+ 3 was requested but is not available])],
+		  [fail2], [AC_MSG_ERROR([GTK+ 2 was requested but is not available])],
+		  [fail],  [AC_MSG_ERROR([GTK+ was requested but is not available])])
+
+		AS_IF([test "x$have_gtk" = xyes], [break])
+	done
 
 	if test "$have_gtk" = "yes" ; then
 		# If we have GTK then add flags for it.
@@ -1745,11 +1674,11 @@ if test "x$enable_wireshark" = "xyes"; then
 		#
 		GTK_CONFIG="$GLIB_CONFIG"
 
-		gtk_config_major_version=`echo $GTK_VERSION | cut -d. -f1`
-		gtk_config_minor_version=`echo $GTK_VERSION | cut -d. -f2`
+		gtk_major_version=`echo $GTK_VERSION | cut -d. -f1`
+		gtk_minor_version=`echo $GTK_VERSION | cut -d. -f2`
 
 		AX_APPEND_FLAG([-DGDK_DISABLE_DEPRECATED], [GTK_CONFIG])
-		if test \( $gtk_config_major_version -eq 3 -a $gtk_config_minor_version -ge 10 \) ; then
+		if test \( $gtk_major_version -eq 3 -a $gtk_minor_version -ge 10 \) ; then
 			## Allow use of deprecated & disable deprecated warnings if Gtk >= 3.10;
 			##  The deprecations in Gtk 3.10 will not be fixed ...
 			AX_APPEND_FLAG([-DGDK_DISABLE_DEPRECATION_WARNINGS], [GTK_CONFIG])
@@ -1757,7 +1686,7 @@ if test "x$enable_wireshark" = "xyes"; then
 			AX_APPEND_FLAG([-DGTK_DISABLE_DEPRECATED], [GTK_CONFIG])
 		fi
 		AX_APPEND_FLAG([-DGTK_DISABLE_SINGLE_INCLUDES], [GTK_CONFIG])
-		if test ! \( $gtk_config_major_version -eq 2 -a $gtk_config_minor_version -lt 20 \) ; then
+		if test ! \( $gtk_major_version -eq 2 -a $gtk_minor_version -lt 20 \) ; then
 			# Enable GSEAL when building with GTK > 2.20
 			# (Versions prior to 2.22 lacked some necessary accessors.)
 			AX_APPEND_FLAG([-DGSEAL_ENABLE], [GTK_CONFIG])
@@ -1806,7 +1735,6 @@ if test "$have_gtk" = "yes" -a "$have_qt" = "no" ; then
 	wireshark_bin="wireshark-gtk\$(EXEEXT)"
 	wireshark_man="wireshark.1"
 	wireshark_SUBDIRS="codecs ui/gtk"
-	use_glib_cflags="false"
 	OSX_APP_FLAGS="$OSX_APP_FLAGS -gtk"
 	OSX_DMG_FLAGS="-gtk"
 fi
@@ -1820,14 +1748,11 @@ if test "$have_gtk" = "no" -a "$have_qt" = "no" ; then
 	# problem).
 	#
 	if test "x$enable_wireshark" = "xyes"; then
-		if test "x$with_gtk3" = "xyes"; then
-			AC_MSG_ERROR([Neither Qt nor GTK+ $GTK3_MIN_VERSION or later are available, so Wireshark can't be compiled])
-		else
-			AC_MSG_ERROR([Neither Qt nor GTK+ $GTK2_MIN_VERSION or later are available, so Wireshark can't be compiled])
-		fi
+		AC_MSG_ERROR([Neither Qt nor GTK+ are available, so Wireshark can't be compiled])
 	fi
 	wireshark_bin=""
 	wireshark_man=""
+	wireshark_SUBDIRS=""
 fi
 
 #
@@ -1968,6 +1893,7 @@ fi
 
 AC_SUBST(wireshark_bin)
 AC_SUBST(wireshark_man)
+AC_SUBST(wireshark_SUBDIRS)
 AM_CONDITIONAL(HAVE_Qt, test "$have_qt" = "yes")
 AM_CONDITIONAL(HAVE_GTK, test "$have_gtk" = "yes")
 AC_SUBST(OSX_APP_FLAGS)
@@ -2666,17 +2592,6 @@ else
 fi
 AC_SUBST(LIBSSH_LIBS)
 
-#
-# Define WS_MSVC_NORETURN appropriately for declarations of routines that
-# never return (just like Charlie on the MTA).
-#
-# Note that MSVC++ expects __declspec(noreturn) to precede the function
-# name and GCC, as far as I know, expects __attribute__((noreturn)) to
-# follow the function name, so we need two different flavors of
-# noreturn tag.
-#
-AC_DEFINE(WS_MSVC_NORETURN,, [Define as the string to precede declarations of routines that never return])
-
 dnl Checks for typedefs, structures, and compiler characteristics.
 # AC_C_CONST
 
@@ -2699,8 +2614,6 @@ AC_C_BIGENDIAN
 # Checks whether "-traditional" is needed when using "ioctl".
 # XXX - do we need this?
 AC_PROG_GCC_TRADITIONAL
-
-AC_CHECK_FUNCS([getaddrinfo])
 
 AC_REPLACE_FUNCS(getopt_long)
 dnl
@@ -2748,14 +2661,12 @@ AC_REPLACE_FUNCS(inet_ntop)
 AC_REPLACE_FUNCS(strptime)
 AC_REPLACE_FUNCS(popcount)
 
+AC_CHECK_FUNCS(getaddrinfo)
 AC_CHECK_FUNCS(mkstemp mkdtemp)
 AC_CHECK_FUNCS(getprotobynumber)
 AC_CHECK_FUNCS(issetugid)
 AC_CHECK_FUNCS(sysconf)
 AC_CHECK_FUNCS(getifaddrs)
-
-dnl blank for now, but will be used in future
-AC_SUBST(wireshark_SUBDIRS)
 
 # Check Bluetooth SBC codec for RTP Player
 # git://git.kernel.org/pub/scm/bluetooth/sbc.git
@@ -2941,7 +2852,7 @@ AC_MSG_CHECKING(whether to build randpktdump)
 
 AC_ARG_ENABLE(randpktdump,
 	AC_HELP_STRING( [--enable-randpktdump],
-		[build androiddump @<:@default=yes@:>@]),
+		[build randpktdump @<:@default=yes@:>@]),
 	randpktdump=$enableval,enable_randpktdump=yes)
 
 if test "x$have_extcap" != xyes; then
@@ -2984,7 +2895,7 @@ AC_SUBST(ENABLE_STATIC)
 
 # Gather which GUI we're building for rpmbuild
 if test "x$have_gtk" = "xyes"; then
-	if test "x$with_gtk3" = "xyes"; then
+	if test "x$gtk_major_version" = "x3"; then
 		RPMBUILD_WITH_ARGS="--with gtk3 --without gtk2"
 	else
 		RPMBUILD_WITH_ARGS="--without gtk3 --with gtk2"

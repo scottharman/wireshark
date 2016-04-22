@@ -384,8 +384,7 @@ diameterstat_init(struct register_srt* srt _U_, GArray* srt_array, srt_gui_init_
 		g_hash_table_destroy(diameterstat_cmd_str_hash);
 	}
 
-	idx = (int *)g_malloc(sizeof(int));
-	*idx = 0;
+	idx = (int *)wmem_alloc0(wmem_epan_scope(), sizeof(int));
 	diameterstat_cmd_str_hash = g_hash_table_new(g_str_hash,g_str_equal);
 	g_hash_table_insert(diameterstat_cmd_str_hash, "Unknown", idx);
 
@@ -417,7 +416,7 @@ diameterstat_packet(void *pss, packet_info *pinfo, epan_dissect_t *edt _U_, cons
 
 	idx = (int*) g_hash_table_lookup(diameterstat_cmd_str_hash, diameter->cmd_str);
 	if (idx == NULL) {
-		idx = (int *)g_malloc(sizeof(int));
+		idx = (int *)wmem_alloc(wmem_epan_scope(), sizeof(int));
 		*idx = (int) g_hash_table_size(diameterstat_cmd_str_hash);
 		g_hash_table_insert(diameterstat_cmd_str_hash, (gchar*) diameter->cmd_str, idx);
 		init_srt_table_row(diameter_srt_table, *idx,  (const char*) diameter->cmd_str);
@@ -1654,20 +1653,20 @@ build_address_avp(const avp_type_t *type _U_, guint32 code,
 
 	basic_avp_reginfo(a, name, FT_BYTES, BASE_NONE, NULL);
 
-	reginfo(&(t->hf_address_type), wmem_strdup_printf(wmem_epan_scope(), "%s Address Family",name),
-		alnumerize(wmem_strdup_printf(wmem_epan_scope(), "diameter.%s.addr_family",name)),
+	reginfo(&(t->hf_address_type), wmem_strconcat(wmem_epan_scope(), name, " Address Family", NULL),
+		alnumerize(wmem_strconcat(wmem_epan_scope(), "diameter.", name, ".addr_family", NULL)),
 		NULL, FT_UINT16, (field_display_e)(BASE_DEC|BASE_EXT_STRING), &diameter_avp_data_addrfamily_vals_ext, 0);
 
-	reginfo(&(t->hf_ipv4), wmem_strdup_printf(wmem_epan_scope(), "%s Address",name),
-		alnumerize(wmem_strdup_printf(wmem_epan_scope(), "diameter.%s.IPv4",name)),
+	reginfo(&(t->hf_ipv4), wmem_strconcat(wmem_epan_scope(), name, " Address", NULL),
+		alnumerize(wmem_strconcat(wmem_epan_scope(), "diameter.", name, ".IPv4", NULL)),
 		NULL, FT_IPv4, BASE_NONE, NULL, 0);
 
-	reginfo(&(t->hf_ipv6), wmem_strdup_printf(wmem_epan_scope(), "%s Address",name),
-		alnumerize(wmem_strdup_printf(wmem_epan_scope(), "diameter.%s.IPv6",name)),
+	reginfo(&(t->hf_ipv6), wmem_strconcat(wmem_epan_scope(), name, " Address", NULL),
+		alnumerize(wmem_strconcat(wmem_epan_scope(), "diameter.", name, ".IPv6", NULL)),
 		NULL, FT_IPv6, BASE_NONE, NULL, 0);
 
-	reginfo(&(t->hf_other), wmem_strdup_printf(wmem_epan_scope(), "%s Address",name),
-		alnumerize(wmem_strdup_printf(wmem_epan_scope(), "diameter.%s.Bytes",name)),
+	reginfo(&(t->hf_other), wmem_strconcat(wmem_epan_scope(), name, " Address", NULL),
+		alnumerize(wmem_strconcat(wmem_epan_scope(), "diameter.", name, ".Bytes", NULL)),
 		NULL, FT_BYTES, BASE_NONE, NULL, 0);
 
 	g_ptr_array_add(build_dict.ett,ettp);
@@ -1680,8 +1679,8 @@ build_proto_avp(const avp_type_t *type _U_, guint32 code,
 		diam_vnd_t *vendor, const char *name _U_,
 		const value_string *vs _U_, void *data)
 {
-	diam_avp_t *a = (diam_avp_t *)g_malloc0(sizeof(diam_avp_t));
-	proto_avp_t *t = (proto_avp_t *)g_malloc0(sizeof(proto_avp_t));
+	diam_avp_t *a = (diam_avp_t *)wmem_alloc0(wmem_epan_scope(), sizeof(diam_avp_t));
+	proto_avp_t *t = (proto_avp_t *)wmem_alloc0(wmem_epan_scope(), sizeof(proto_avp_t));
 	gint *ettp = &(a->ett);
 
 	a->code = code;
@@ -1733,7 +1732,7 @@ build_simple_avp(const avp_type_t *type, guint32 code, diam_vnd_t *vendor,
 		while (vs[i].strptr) {
 		  i++;
 		}
-		vs_ext = value_string_ext_new(vs, i+1, wmem_strdup_printf(wmem_epan_scope(), "%s_vals_ext",name));
+		vs_ext = value_string_ext_new(vs, i+1, wmem_strconcat(wmem_epan_scope(), name, "_vals_ext", NULL));
 		base = (field_display_e)(base|BASE_EXT_STRING);
 	}
 
@@ -1898,9 +1897,9 @@ dictionary_load(void)
 	}
 
 	/* load the dictionary */
-	dir = g_strdup_printf("%s" G_DIR_SEPARATOR_S "diameter" G_DIR_SEPARATOR_S, get_datafile_dir());
+	dir = wmem_strdup_printf(wmem_epan_scope(), "%s" G_DIR_SEPARATOR_S "diameter" G_DIR_SEPARATOR_S, get_datafile_dir());
+	/* XXX We don't call ddict_free anywhere. */
 	d = ddict_scan(dir,"dictionary.xml",do_debug_parser);
-	g_free(dir);
 	if (d == NULL) {
 		g_hash_table_destroy(vendors);
 		g_array_free(vnd_shrt_arr, TRUE);
@@ -1962,7 +1961,7 @@ dictionary_load(void)
 
 		dictionary.applications = value_string_ext_new((value_string *)wmem_array_get_raw(arr),
 								wmem_array_get_count(arr),
-								wmem_strdup_printf(wmem_epan_scope(), "applications_vals_ext"));
+								wmem_strdup(wmem_epan_scope(), "applications_vals_ext"));
 	}
 
 	if ((v = d->vendors)) {

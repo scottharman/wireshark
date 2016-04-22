@@ -499,6 +499,7 @@ static int hf_btatt_heart_rate_measurement_flags_value_16 = -1;
 static int hf_btatt_heart_rate_measurement_value_8 = -1;
 static int hf_btatt_heart_rate_measurement_value_16 = -1;
 static int hf_btatt_heart_rate_measurement_energy_expended = -1;
+static int hf_btatt_heart_rate_measurement_rr_intervals = -1;
 static int hf_btatt_heart_rate_measurement_rr_interval = -1;
 static int hf_btatt_record_access_control_point_opcode = -1;
 static int hf_btatt_record_access_control_point_operator = -1;
@@ -5304,8 +5305,12 @@ dissect_attribute_value(proto_tree *tree, proto_item *patron_item, packet_info *
         }
 
         if (flags & 0x10) {
-            proto_tree_add_item(tree, hf_btatt_heart_rate_measurement_rr_interval, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-            offset += 2;
+            sub_item = proto_tree_add_item(tree, hf_btatt_heart_rate_measurement_rr_intervals, tvb, offset, tvb_captured_length_remaining(tvb, offset), ENC_NA);
+            sub_tree = proto_item_add_subtree(sub_item, ett_btatt_list);
+            while (tvb_reported_length_remaining(tvb, offset)) {
+                proto_tree_add_item(sub_tree, hf_btatt_heart_rate_measurement_rr_interval, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+                offset += 2;
+            }
         }
 
         break;
@@ -11926,6 +11931,11 @@ proto_register_btatt(void)
             FT_UINT16, BASE_DEC, NULL, 0x0,
             NULL, HFILL}
         },
+        {&hf_btatt_heart_rate_measurement_rr_intervals,
+            {"RR Intervals", "btatt.heart_rate_measurement.rr_intervals",
+            FT_NONE, BASE_NONE, NULL, 0x0,
+            NULL, HFILL}
+        },
         {&hf_btatt_heart_rate_measurement_rr_interval,
             {"RR Interval", "btatt.heart_rate_measurement.rr_interval",
             FT_UINT16, BASE_DEC, NULL, 0x0,
@@ -14046,6 +14056,7 @@ void
 proto_reg_handoff_btatt(void)
 {
     gint                i_array;
+    GString            *uuid_str = g_string_new("");
 
     http_handle = find_dissector_add_dependency("http", proto_btatt);
     usb_hid_boot_keyboard_input_report_handle  = find_dissector_add_dependency("usbhid.boot_report.keyboard.input", proto_btatt);
@@ -14072,18 +14083,19 @@ proto_reg_handoff_btatt(void)
             continue;
         }
 
-        name       = wmem_strdup_printf(wmem_epan_scope(), "Bluetooth GATT Attribute %s (UUID 0x%04x)",
-                bluetooth_uuid_vals[i_array].strptr, bluetooth_uuid_vals[i_array].value);
-        short_name = wmem_strdup_printf(wmem_epan_scope(), "BT GATT %s (UUID 0x%04x)",
-                bluetooth_uuid_vals[i_array].strptr, bluetooth_uuid_vals[i_array].value);
-        abbrev     = wmem_strdup_printf(wmem_epan_scope(), "btgatt.uuid0x%04x",
-                bluetooth_uuid_vals[i_array].value);
+        g_string_printf(uuid_str, "0x%04x", bluetooth_uuid_vals[i_array].value);
+        name       = wmem_strconcat(wmem_epan_scope(), "Bluetooth GATT Attribute ",
+                bluetooth_uuid_vals[i_array].strptr, " (UUID ", uuid_str->str, ")", NULL);
+        short_name = wmem_strconcat(wmem_epan_scope(), "BT GATT ",
+                bluetooth_uuid_vals[i_array].strptr, " (UUID ", uuid_str->str, ")", NULL);
+        abbrev     = wmem_strconcat(wmem_epan_scope(), "btgatt.uuid", uuid_str->str, NULL);
 
         proto_tmp = proto_register_protocol(name, short_name, abbrev);
         handle_tmp = register_dissector(abbrev, dissect_btgatt, proto_tmp);
 
         dissector_add_for_decode_as("btatt.handle", handle_tmp);
     }
+    g_string_free(uuid_str, TRUE);
 }
 
 void

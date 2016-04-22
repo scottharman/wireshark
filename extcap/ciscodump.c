@@ -110,10 +110,10 @@ static char* interfaces_list_to_filter(GSList* interfaces, unsigned int remote_p
 		g_string_append_printf(filter, "deny tcp host %s any eq %u, deny tcp any eq %u host %s",
 				(char*)interfaces->data, remote_port, remote_port, (char*)interfaces->data);
 		cur = g_slist_next(interfaces);
-		while (cur->next != NULL) {
+		while (cur) {
 			g_string_append_printf(filter, ", deny tcp host %s any eq %u, deny tcp any eq %u host %s",
 				(char*)cur->data, remote_port, remote_port, (char*)cur->data);
-			cur = cur->next;
+			cur = g_slist_next(cur);
 		}
 		g_string_append_printf(filter, ", permit ip any any");
 	}
@@ -228,7 +228,7 @@ static int parse_line(char* packet _U_, unsigned* offset, char* line, int status
 	while(*part) {
 		if (strlen(*part) > 1) {
 			value = (guint32)strtoul(*part, NULL, 16);
-			value = htonl(value);
+			value = ntohl(value);
 			size = strlen(*part) / 2;
 			memcpy(packet + *offset, &value, size);
 			*offset += (guint32)size;

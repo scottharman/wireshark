@@ -508,8 +508,6 @@ sub update_release_notes
 	my $version = "";
 	my $filepath = "$srcdir/docbook/asciidoc.conf";
 
-	return if (!$set_version);
-
 	open(ADOC_CONF, "< $filepath") || die "Can't read $filepath!";
 	while ($line = <ADOC_CONF>) {
 		# wireshark-version:\[\]=1.9.1
@@ -538,8 +536,6 @@ sub update_debian_changelog
 	my $version = "";
 	my $filepath = "$srcdir/debian/changelog";
 
-	return if ($set_version == 0);
-
 	open(CHANGELOG, "< $filepath") || die "Can't read $filepath!";
 	while ($line = <CHANGELOG>) {
 		if ($set_version && CHANGELOG->input_line_number() == 1) {
@@ -566,8 +562,6 @@ sub update_automake_lib_releases
 	my $version = "";
 	my $filedir;
 	my $filepath;
-
-	return if (!$set_version);
 
 	# The Libtool manual says
 	#   "If the library source code has changed at all since the last
@@ -605,8 +599,6 @@ sub update_cmake_lib_releases
 	my $filedir;
 	my $filepath;
 
-	return if (!$set_version);
-
 	for $filedir ("epan", "wiretap") {	# "wsutil"
 		$contents = "";
 		$filepath = $filedir . "/CMakeLists.txt";
@@ -633,10 +625,12 @@ sub update_versioned_files
 	&update_cmakelists_txt;
 	&update_configure_ac;
 	&update_config_nmake;
-	&update_release_notes;
-	&update_debian_changelog;
-	&update_automake_lib_releases;
-	&update_cmake_lib_releases;
+	if ($set_version) {
+		&update_release_notes;
+		&update_debian_changelog;
+		&update_automake_lib_releases;
+		&update_cmake_lib_releases;
+	}
 }
 
 sub new_version_h
@@ -779,16 +773,20 @@ make-version.pl [options] [source directory]
     --set-vcs, -s              Set the information in version.h
     --print-vcs                Print the vcs version to standard output
     --set-version, -v          Set the major, minor, and micro versions in
-                               configure.ac, config.nmake, debian/changelog,
-			       and docbook/asciidoc.conf.
+                               the top-level CMakeLists.txt, configure.ac,
+                               config.nmake, docbook/asciidoc.conf,
+                               debian/changelog, the Makefile.am for all
+                               libraries, and the CMakeLists.txt for all
+                               libraries.
                                Resets the release information when used by
-			       itself.
-    --set-release, -r          Set the release information in configure.ac
-                               and config.nmake
+                               itself.
+    --set-release, -r          Set the release information in the top-level
+                               CMakeLists.txt, configure.ac, and
+                               config.nmake.
     --package-version, -p      Deprecated. Same as --set-release.
     --verbose                  Print diagnostic messages to STDERR.
 
-Options can be used in any combination. If none are specified B<--set-svn>
+Options can be used in any combination. If none are specified B<--set-vcs>
 is assumed.
 
 =cut

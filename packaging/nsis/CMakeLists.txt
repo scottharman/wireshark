@@ -76,7 +76,7 @@ set(WIRESHARK_LIB_DIR "${_wireshark_lib_dir}")
 set(WINPCAP_PACKAGE_VERSION ${WINPCAP_VERSION})
 string(REPLACE "_" "." PCAP_DISPLAY_VERSION "${WINPCAP_PACKAGE_VERSION}")
 
-set(USBPCAP_DISPLAY_VERSION "1.1.0.0-g794bf26")
+set(USBPCAP_DISPLAY_VERSION "1.1.0.0-g794bf26-3")
 
 set(PRODUCT_VERSION ${PROJECT_MAJOR_VERSION}.${PROJECT_MINOR_VERSION}.${PROJECT_PATCH_VERSION}.${PROJECT_BUILD_VERSION})
 # XXX Shouldn't this reflect the API / ABI version?
@@ -102,13 +102,15 @@ if(BUILD_wireshark_gtk AND GTK_FOUND)
 	set (GTK_DIR "\${STAGING_DIR}")
 endif()
 
-# This *should* be compatible with the way we currently do things.
-if(MSVC12)
-	set(_vcredist_name "vcredist_${TARGET_MACHINE}.exe")
-	find_program(VCREDIST_EXE "${_vcredist_name}"
-		HINTS "${WIRESHARK_LIB_DIR}/vcredist_MSVC2013" "${WIRESHARK_LIB_DIR}"
-	)
+# Use the vcredist that comes with Visual Studio (From MSVC 2013?)
+set(_vcredist_name "vcredist_${TARGET_MACHINE}.exe")
+find_program(VCREDIST_EXE "${_vcredist_name}"
+	PATHS ENV "VCINSTALLDIR"
+	PATH_SUFFIXES "redist/1033"
+)
+if(VCREDIST_EXE)
 	file(TO_NATIVE_PATH "${VCREDIST_EXE}" VCREDIST_EXE)
+	message(STATUS "Using ${VCREDIST_EXE} for the installer")
 endif()
 
 if(NOT ENABLE_STATIC)

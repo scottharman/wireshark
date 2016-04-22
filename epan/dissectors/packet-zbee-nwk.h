@@ -64,6 +64,7 @@
 #define ZBEE_NWK_CMD_NWK_UPDATE                 0x0a    /* ZigBee 2007 and later */
 #define ZBEE_NWK_CMD_ED_TIMEOUT_REQUEST         0x0b    /* r21 */
 #define ZBEE_NWK_CMD_ED_TIMEOUT_RESPONSE        0x0c    /* r21 */
+#define ZBEE_NWK_CMD_LINK_PWR_DELTA             0x0d    /* r22 */
 
 /*  ZigBee NWK Route Options Flags */
 #define ZBEE_NWK_CMD_ROUTE_OPTION_REPAIR        0x80    /* ZigBee 2004 only. */
@@ -106,6 +107,9 @@
 #define ZBEE_NWK_CMD_ED_TIMEO_RSP_PRNT_INFO_MAC_DATA_POLL_KEEPAL_SUPP  0x01
 #define ZBEE_NWK_CMD_ED_TIMEO_RSP_PRNT_INFO_ED_TIMOU_REQ_KEEPAL_SUPP   0x02
 
+/* ZigBee NWK Link Power Delta Options */
+#define ZBEE_NWK_CMD_NWK_LINK_PWR_DELTA_TYPE_MASK   0x03
+
 /* Network Status Code Definitions. */
 #define ZBEE_NWK_STATUS_NO_ROUTE_AVAIL      0x00
 #define ZBEE_NWK_STATUS_TREE_LINK_FAIL      0x01
@@ -126,6 +130,7 @@
 #define ZBEE_NWK_STATUS_ADDRESS_UPDATE      0x10
 #define ZBEE_NWK_STATUS_BAD_FRAME_COUNTER   0x11
 #define ZBEE_NWK_STATUS_BAD_KEY_SEQNO       0x12
+#define ZBEE_NWK_STATUS_UNKNOWN_COMMAND     0x13
 
 #define ZBEE_SEC_CONST_KEYSIZE              16
 
@@ -193,11 +198,12 @@ extern GHashTable *zbee_table_link_keyring;
 
 /* ZigBee PRO beacons */
 #define ZBEE_NWK_BEACON_PROTOCOL_ID            0x00
-#define ZBEE_NWK_BEACON_STACK_PROFILE          0x0f
-#define ZBEE_NWK_BEACON_PROTOCOL_VERSION       0xf0
-#define ZBEE_NWK_BEACON_ROUTER_CAPACITY        0x04
-#define ZBEE_NWK_BEACON_NETWORK_DEPTH          0x78
-#define ZBEE_NWK_BEACON_END_DEVICE_CAPACITY    0x80
+#define ZBEE_NWK_BEACON_STACK_PROFILE        0x000f
+#define ZBEE_NWK_BEACON_PROTOCOL_VERSION     0x00f0
+#define ZBEE_NWK_BEACON_ROUTER_CAPACITY      0x0400
+#define ZBEE_NWK_BEACON_NETWORK_DEPTH        0x7800
+#define ZBEE_NWK_BEACON_END_DEVICE_CAPACITY  0x8000
+#define ZBEE_NWK_BEACON_LENGTH                   15
 
 /* ZigBee IP beacons */
 #define ZBEE_IP_BEACON_PROTOCOL_ID             0x02

@@ -369,6 +369,7 @@ set(DISSECTOR_SRC
 	packet-btamp.c
 	packet-btatt.c
 	packet-btbnep.c
+	packet-btbredr_rf.c
 	packet-btavctp.c
 	packet-btavdtp.c
 	packet-btavrcp.c
@@ -536,6 +537,7 @@ set(DISSECTOR_SRC
 	packet-dmx.c
 	packet-dnp.c
 	packet-dns.c
+	packet-dof.c
 	packet-dplay.c
 	packet-dpnss-link.c
 	packet-dpnss.c
