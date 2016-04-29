@@ -8,8 +8,9 @@
 m4_define([version_major], [2])
 m4_define([version_minor], [1])
 m4_define([version_micro], [0])
-m4_define([version_micro_extra], version_micro)
-m4_append([version_micro_extra], [])
+dnl Updated by make-version.pl
+m4_define([version_extra], [-git])
+m4_define([version_micro_extra], m4_join([], version_micro, version_extra))
 
 AC_INIT(wireshark, [version_major.version_minor.version_micro_extra], http://bugs.wireshark.org/, , http://www.wireshark.org/)
 CONFIG_ARGS="$*"
@@ -116,6 +117,7 @@ AX_PROG_CC_FOR_BUILD
 #
 AC_PROG_SED
 
+AC_PROG_LN_S
 AC_PROG_MKDIR_P
 
 AC_PATH_PROG(PERL, perl)
@@ -2934,7 +2936,7 @@ AC_CACHE_SAVE
 sinclude(plugins/Custom.m4) dnl
 ifdef(_CUSTOM_AC_OUTPUT_,, define(_CUSTOM_AC_OUTPUT_, )) dnl
 
-sinclude(asn1/Custom.m4) dnl
+sinclude(epan/dissectors/asn1/Custom.m4) dnl
 ifdef(_CUSTOM_ASN1_AC_OUTPUT_,, define(_CUSTOM_ASN1_AC_OUTPUT_, )) dnl
 
 AC_CONFIG_HEADERS([config.h])

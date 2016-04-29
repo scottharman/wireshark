@@ -34,6 +34,7 @@ the current capture file via the View menu in the Qt GUI.
 resolution some build dependencies must be present (currently c-ares). If that is not the case DNS
 name resolution will be disabled (but other name resolution mechanisms, such as host files,
 are still available).
+** Highlight hovered byte in Packet Bytes Pane
 
 //=== Removed Dissectors
 
@@ -70,6 +71,7 @@ Open Mobile Alliance Lightweight Machine to Machine TLV payload Added (LwM2M TLV
 Metamako trailers
 ISO 8583-1
 Bluetooth Pseudoheader for BR/EDR
+Edge Control Protocol (ECP)
 
 // Items in --sort-and-group-- blocks will be sorted and comma-separated.
 --sort-and-group--
@@ -83,8 +85,9 @@ DecodeAs it over USB, TCP and UDP.
 Too many protocols have been updated to list here.
 
 === New and Updated Capture File Support
+Micropross mplog
 
-_Non-empty section placeholder._
+//_Non-empty section placeholder._
 --sort-and-group--
 --sort-and-group--
 
