@@ -130,7 +130,6 @@ typedef struct sub_net_hashipv4 {
     guint             addr;
     guint8            flags;          /* B0 dummy_entry, B1 resolve, B2 If the address is used in the trace */
     struct sub_net_hashipv4   *next;
-    gchar             ip[16];
     gchar             name[MAXNAMELEN];
 } sub_net_hashipv4_t;
 
@@ -205,8 +204,8 @@ static GHashTable   *ipv4_hash_table = NULL;
 static GHashTable   *ipv6_hash_table = NULL;
 static GHashTable   *vlan_hash_table = NULL;
 
-static GSList *manually_resolved_ipv4_list = NULL;
-static GSList *manually_resolved_ipv6_list = NULL;
+static wmem_list_t *manually_resolved_ipv4_list = NULL;
+static wmem_list_t *manually_resolved_ipv6_list = NULL;
 
 typedef struct _resolved_ipv4
 {
@@ -344,7 +343,7 @@ ares_channel ghbn_chan; /* ares_gethostbyname -- Usually interactive, timeout */
 
 static  gboolean  async_dns_initialized = FALSE;
 static  guint       async_dns_in_flight = 0;
-static  GList    *async_dns_queue_head = NULL;
+static  wmem_list_t *async_dns_queue_head = NULL;
 
 /* push a dns request */
 static void
@@ -355,7 +354,7 @@ add_async_dns_ipv4(int type, guint32 addr)
     msg = wmem_new(wmem_epan_scope(), async_dns_queue_msg_t);
     msg->family = type;
     msg->addr.ip4 = addr;
-    async_dns_queue_head = g_list_append(async_dns_queue_head, (gpointer) msg);
+    wmem_list_append(async_dns_queue_head, (gpointer) msg);
 }
 #endif /* HAVE_C_ARES */
 
@@ -874,7 +873,7 @@ host_lookup6(const struct e_in6_addr *addr)
             caqm = wmem_new(wmem_epan_scope(), async_dns_queue_msg_t);
             caqm->family = AF_INET6;
             memcpy(&caqm->addr.ip6, addr, sizeof(caqm->addr.ip6));
-            async_dns_queue_head = g_list_append(async_dns_queue_head, (gpointer) caqm);
+            wmem_list_append(async_dns_queue_head, (gpointer) caqm);
         }
 #endif
     }
@@ -2102,12 +2101,12 @@ add_ip_name_from_string (const char *addr, const char *name)
         resolved_ipv6_entry = wmem_new(wmem_epan_scope(), resolved_ipv6_t);
         memcpy(&(resolved_ipv6_entry->ip6_addr), &host_addr.ip6_addr, 16);
         g_strlcpy(resolved_ipv6_entry->name, name, MAXNAMELEN);
-        manually_resolved_ipv6_list = g_slist_prepend(manually_resolved_ipv6_list, resolved_ipv6_entry);
+        wmem_list_prepend(manually_resolved_ipv6_list, resolved_ipv6_entry);
     } else {
         resolved_ipv4_entry = wmem_new(wmem_epan_scope(), resolved_ipv4_t);
         resolved_ipv4_entry->host_addr = host_addr.ip4_addr;
         g_strlcpy(resolved_ipv4_entry->name, name, MAXNAMELEN);
-        manually_resolved_ipv4_list = g_slist_prepend(manually_resolved_ipv4_list, resolved_ipv4_entry);
+        wmem_list_prepend(manually_resolved_ipv4_list, resolved_ipv4_entry);
     }
 
     return TRUE;
@@ -2123,7 +2122,7 @@ ipv4_hash_table_resolved_to_list(gpointer key _U_, gpointer value, gpointer user
     hashipv4_t *ipv4_hash_table_entry = (hashipv4_t *)value;
 
     if ((ipv4_hash_table_entry->flags & USED_AND_RESOLVED_MASK) == RESOLVED_ADDRESS_USED) {
-        lists->ipv4_addr_list = g_list_prepend (lists->ipv4_addr_list, ipv4_hash_table_entry);
+        lists->ipv4_addr_list = g_list_prepend(lists->ipv4_addr_list, ipv4_hash_table_entry);
     }
 
 }
@@ -2305,7 +2304,7 @@ subnet_entry_set(guint32 subnet_addr, const guint32 mask_length, const gchar* na
             }
         }
 
-        new_tp = g_new(sub_net_hashipv4_t, 1);
+        new_tp = wmem_new(wmem_epan_scope(), sub_net_hashipv4_t);
         tp->next = new_tp;
         tp = new_tp;
     } else {
@@ -2348,16 +2347,6 @@ subnet_name_lookup_init(void)
         report_open_failure(subnetspath, errno, FALSE);
     }
     g_free(subnetspath);
-}
-
-static void
-cleanup_subnet_entry(sub_net_hashipv4_t* entry)
-{
-    if ((entry != NULL) && (entry->next != NULL)) {
-        cleanup_subnet_entry(entry->next);
-    }
-
-    wmem_free(wmem_epan_scope(), entry);
 }
 
 /*
@@ -2451,6 +2440,7 @@ host_name_lookup_process(void) {
     int nfds;
     fd_set rfds, wfds;
     gboolean nro = new_resolved_objects;
+    wmem_list_frame_t* head;
 
     new_resolved_objects = FALSE;
 
@@ -2458,11 +2448,11 @@ host_name_lookup_process(void) {
         /* c-ares not initialized. Bail out and cancel timers. */
         return nro;
 
-    async_dns_queue_head = g_list_first(async_dns_queue_head);
+    head = wmem_list_head(async_dns_queue_head);
 
-    while (async_dns_queue_head != NULL && async_dns_in_flight <= name_resolve_concurrency) {
-        caqm = (async_dns_queue_msg_t *) async_dns_queue_head->data;
-        async_dns_queue_head = g_list_remove(async_dns_queue_head, (void *) caqm);
+    while (head != NULL && async_dns_in_flight <= name_resolve_concurrency) {
+        caqm = (async_dns_queue_msg_t *)wmem_list_frame_data(head);
+        wmem_list_remove_frame(async_dns_queue_head, head);
         if (caqm->family == AF_INET) {
             ares_gethostbyaddr(ghba_chan, &caqm->addr.ip4, sizeof(guint32), AF_INET,
                     c_ares_ghba_cb, caqm);
@@ -2472,6 +2462,8 @@ host_name_lookup_process(void) {
                     AF_INET6, c_ares_ghba_cb, caqm);
             async_dns_in_flight++;
         }
+
+        head = wmem_list_head(async_dns_queue_head);
     }
 
     FD_ZERO(&rfds);
@@ -2491,15 +2483,6 @@ host_name_lookup_process(void) {
 
 static void
 _host_name_lookup_cleanup(void) {
-    GList *cur;
-
-    cur = g_list_first(async_dns_queue_head);
-    while (cur) {
-        g_free(cur->data);
-        cur = g_list_next (cur);
-    }
-
-    g_list_free(async_dns_queue_head);
     async_dns_queue_head = NULL;
 
     if (async_dns_initialized) {
@@ -2639,11 +2622,11 @@ static void
 add_manually_resolved(void)
 {
     if (manually_resolved_ipv4_list) {
-        g_slist_foreach(manually_resolved_ipv4_list, add_manually_resolved_ipv4, NULL);
+        wmem_list_foreach(manually_resolved_ipv4_list, add_manually_resolved_ipv4, NULL);
     }
 
     if (manually_resolved_ipv6_list) {
-        g_slist_foreach(manually_resolved_ipv6_list, add_manually_resolved_ipv6, NULL);
+        wmem_list_foreach(manually_resolved_ipv6_list, add_manually_resolved_ipv6, NULL);
     }
 }
 
@@ -2661,6 +2644,17 @@ host_name_lookup_init(void)
 
     g_assert(ipv6_hash_table == NULL);
     ipv6_hash_table = g_hash_table_new(ipv6_oat_hash, ipv6_equal);
+
+#ifdef HAVE_C_ARES
+    g_assert(async_dns_queue_head == NULL);
+    async_dns_queue_head = wmem_list_new(wmem_epan_scope());
+#endif
+
+    if (manually_resolved_ipv4_list == NULL)
+        manually_resolved_ipv4_list = wmem_list_new(wmem_epan_scope());
+
+    if (manually_resolved_ipv6_list == NULL)
+        manually_resolved_ipv6_list = wmem_list_new(wmem_epan_scope());
 
     /*
      * Load the global hosts file, if we have one.
@@ -2708,6 +2702,8 @@ void
 host_name_lookup_cleanup(void)
 {
     guint32 i, j;
+    sub_net_hashipv4_t *entry, *next_entry;
+
     _host_name_lookup_cleanup();
 
     if (ipxnet_hash_table) {
@@ -2728,9 +2724,10 @@ host_name_lookup_cleanup(void)
     for(i = 0; i < SUBNETLENGTHSIZE; ++i) {
         if (subnet_length_entries[i].subnet_addresses != NULL) {
             for (j = 0; j < HASHHOSTSIZE; j++) {
-                if (subnet_length_entries[i].subnet_addresses[j] != NULL)
-                {
-                    cleanup_subnet_entry(subnet_length_entries[i].subnet_addresses[j]);
+                for (entry = subnet_length_entries[i].subnet_addresses[j];
+                     entry != NULL; entry = next_entry) {
+                    next_entry = entry->next;
+                    wmem_free(wmem_epan_scope(), entry);
                 }
             }
             wmem_free(wmem_epan_scope(), subnet_length_entries[i].subnet_addresses);
@@ -2762,14 +2759,12 @@ void
 manually_resolve_cleanup(void)
 {
     if (manually_resolved_ipv4_list) {
-        g_slist_foreach(manually_resolved_ipv4_list, free_manually_resolved_ipv4, NULL);
-        g_slist_free(manually_resolved_ipv4_list);
+        wmem_list_foreach(manually_resolved_ipv4_list, free_manually_resolved_ipv4, NULL);
         manually_resolved_ipv4_list = NULL;
     }
 
     if (manually_resolved_ipv6_list) {
-        g_slist_foreach(manually_resolved_ipv6_list, free_manually_resolved_ipv6, NULL);
-        g_slist_free(manually_resolved_ipv6_list);
+        wmem_list_foreach(manually_resolved_ipv6_list, free_manually_resolved_ipv6, NULL);
         manually_resolved_ipv6_list = NULL;
     }
 

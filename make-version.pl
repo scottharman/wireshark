@@ -142,7 +142,7 @@ sub read_repo_info {
 		$version_pref{"git_client"} = 1;
 	} elsif (-d "$srcdir/.svn" or -d "$srcdir/../.svn") {
 		$info_source = "Command line (svn info)";
-		$info_cmd = "svn info $srcdir";
+		$info_cmd = "cd $srcdir; svn info";
 		$version_pref{"svn_client"} = 1;
 	} elsif (-d "$srcdir/.git/svn") {
 		$info_source = "Command line (git-svn)";
@@ -421,8 +421,8 @@ sub update_cmakelists_txt
 			$line = sprintf("set(PROJECT_MINOR_VERSION %d)$1", $version_pref{"version_minor"});
 		} elsif ($line =~ /^set *\( *PROJECT_PATCH_VERSION .*([\r\n]+)$/) {
 			$line = sprintf("set(PROJECT_PATCH_VERSION %d)$1", $version_pref{"version_micro"});
-		} elsif ($line =~ /^set *\( *PROJECT_VERSION_EXTENSION\b.*\) *$/) {
-			$line = sprintf("set(PROJECT_VERSION_EXTENSION \"%s\")\n", $cmake_package_string);
+		} elsif ($line =~ /^set *\( *PROJECT_VERSION_EXTENSION\b.*\) *([\r\n]+)$/) {
+			$line = sprintf("set(PROJECT_VERSION_EXTENSION \"%s\")$1", $cmake_package_string);
 		}
 		$contents .= $line
 	}
@@ -622,6 +622,11 @@ sub update_cmake_lib_releases
 # Update distributed files that contain any version information
 sub update_versioned_files
 {
+        # Matches CMakeLists.txt
+        printf "GR: %d, MaV: %d, MiV: %d, PL: %d, EV: %s\n",
+                $num_commits, $version_pref{"version_major"},
+                $version_pref{"version_minor"}, $version_pref{"version_micro"},
+                $package_string;
 	&update_cmakelists_txt;
 	&update_configure_ac;
 	&update_config_nmake;
@@ -756,7 +761,7 @@ sub get_config {
 
 if ($set_version || $set_release) {
 	if ($set_version) {
-		print "Generating version information\n";
+		print "Generating version information.\n";
 	}
 
 	if ($version_pref{"enable"} == 0) {
@@ -765,7 +770,7 @@ if ($set_version || $set_release) {
 	}
 
 	if ($set_release) {
-		print "Generating release information\n";
+		print "Generating release information.\n";
 	} else {
 		print "Resetting release information\n";
 		$num_commits = 0;

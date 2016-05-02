@@ -391,16 +391,12 @@ File "${VCREDIST_EXE}"
 ; http://blogs.msdn.com/b/astebner/archive/2010/10/20/10078468.aspx
 ; http://allthingsconfigmgr.wordpress.com/2013/12/17/visual-c-redistributables-made-simple/
 ; "!if ${MSVC_VER_REQUIRED} >= 1600" doesn't work.
-!searchparse /noerrors ${MSVC_VER_REQUIRED} "1400" VCREDIST_FLAGS_Q "1500" VCREDIST_FLAGS_Q "1600" VCREDIST_FLAGS_Q_NORESTART
-!ifdef VCREDIST_FLAGS_Q
-StrCpy $VCREDIST_FLAGS "/q"
-!else ; VCREDIST_FLAGS_Q
+!searchparse /noerrors ${MSVC_VER_REQUIRED} "1600" VCREDIST_FLAGS_Q_NORESTART
 !ifdef VCREDIST_FLAGS_Q_NORESTART
 StrCpy $VCREDIST_FLAGS "/q /norestart"
 !else ; VCREDIST_FLAGS_Q_NORESTART
-StrCpy $VCREDIST_FLAGS "/quiet /norestart"
+StrCpy $VCREDIST_FLAGS "/install /quiet /norestart"
 !endif ; VCREDIST_FLAGS_Q_NORESTART
-!endif ; VCREDIST_FLAGS_Q
 
 ExecWait '"$INSTDIR\vcredist_${TARGET_MACHINE}.exe" $VCREDIST_FLAGS' $0
 DetailPrint "vcredist_${TARGET_MACHINE} returned $0"
@@ -1059,14 +1055,15 @@ SetOutPath $INSTDIR\extcap
 File "${STAGING_DIR}\extcap\androiddump.exe"
 SectionEnd
 
-;WIP: uncomment this section when sshdump on windows will be ready to go
-;Section /o "Sshdump" SecSshdumpinfos
+Section /o "SSHdump" SecSSHdumpinfos
 ;-------------------------------------------
-;SetOutPath $INSTDIR
-;File "${STAGING_DIR}\sshdump.html"
-;SetOutPath $INSTDIR\extcap
-;File "${STAGING_DIR}\extcap\sshdump.exe"
-;SectionEnd
+SetOutPath $INSTDIR
+File "${STAGING_DIR}\sshdump.html"
+File "${STAGING_DIR}\ciscodump.html"
+SetOutPath $INSTDIR\extcap
+File "${STAGING_DIR}\extcap\sshdump.exe"
+File "${STAGING_DIR}\extcap\ciscodump.exe"
+SectionEnd
 
 Section /o "Randpktdump" SecRandpktdumpinfos
 ;-------------------------------------------
@@ -1122,8 +1119,7 @@ SectionEnd
 
   !insertmacro MUI_DESCRIPTION_TEXT ${SecToolsGroup} "Additional command line based tools."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecAndroiddumpinfos} "Provide capture interfaces from Android devices"
-;WIP: uncomment this section when sshdump on windows will be ready to go
-;!insertmacro MUI_DESCRIPTION_TEXT ${SecSshdumpinfos} "Provide remote capture through SSH"
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecSSHdumpinfos} "Provide remote capture through SSH"
   !insertmacro MUI_DESCRIPTION_TEXT ${SecRandpktdumpinfos} "Provide random packet generator"
   !insertmacro MUI_DESCRIPTION_TEXT ${SecEditCap} "Copy packets to a new file, optionally trimmming packets, omitting them, or saving to a different format."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecText2Pcap} "Read an ASCII hex dump and write the data into a libpcap-style capture file."

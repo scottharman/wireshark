@@ -2441,20 +2441,12 @@ ptvcursor_add(ptvcursor_t *ptvc, int hfindex, gint length,
 	offset = ptvc->offset;
 	PROTO_REGISTRAR_GET_NTH(hfindex, hfinfo);
 	get_hfi_length(hfinfo, ptvc->tvb, offset, &length, &item_length);
+	test_length(hfinfo, ptvc->tvb, offset, item_length);
 
-	if (!ptvc->tree) {
-		ptvc->offset += get_full_length(hfinfo, ptvc->tvb, offset,
-		    length, item_length, encoding);
-		return NULL;
-	}
-
-	offset = ptvc->offset;
-	PROTO_REGISTRAR_GET_NTH(hfindex, hfinfo);
-	get_hfi_length(hfinfo, ptvc->tvb, offset, &length, &item_length);
 	ptvc->offset += get_full_length(hfinfo, ptvc->tvb, offset, length,
 	    item_length, encoding);
 
-	test_length(hfinfo, ptvc->tvb, offset, item_length);
+	CHECK_FOR_NULL_TREE(ptvc->tree);
 
 	/* Coast clear. Try and fake it */
 	TRY_TO_FAKE_THIS_ITEM(ptvc->tree, hfindex, hfinfo);

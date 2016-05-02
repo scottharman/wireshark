@@ -1593,9 +1593,9 @@ epl_duplication_insert(GHashTable* table, gpointer ptr, guint32 frame)
 	/* insert the data struct into the table */
 	else
 	{
-		key = (duplication_key *)g_memdup(ptr,sizeof(duplication_key));
+		key = (duplication_key *)wmem_memdup(wmem_file_scope(), ptr,sizeof(duplication_key));
 		/* create memory */
-		data = (duplication_data *)g_malloc0(sizeof(duplication_data));
+		data = (duplication_data *)wmem_alloc0(wmem_file_scope(), sizeof(duplication_data));
 		data->frame = frame;
 		g_hash_table_insert(table,(gpointer)key, data);
 	}
@@ -3214,7 +3214,7 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 }
 
 gint
-dissect_epl_sdo_command_write_multiple_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented  _U_, gboolean response, guint16 segment_size)
+dissect_epl_sdo_command_write_multiple_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint dataoffset;
 	guint8 subindex = 0x00,  padding = 0x00;

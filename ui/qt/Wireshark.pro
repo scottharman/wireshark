@@ -198,7 +198,8 @@ SOURCES_WS_C = \
     ../../filter_files.c \
     ../../frame_tvbuff.c \
     ../../summary.c \
-    ../../sync_pipe_write.c
+    ../../sync_pipe_write.c \
+    ../../ws_version_info.c
 
 win32:SOURCES_WS_C += \
     ../../ui/win32/console_win32.c \
@@ -544,6 +545,7 @@ win32 {
         $${GNUTLS_DIR}/bin/libintl-8.dll $${SMI_DIR}/bin/libsmi-2.dll \
         $${LUA_DIR}/lua52.dll \
         $${GEOIP_DIR}/bin/libGeoIP-1.dll \
+        $${LIBSSH_DIR}/bin/libssh.dll \
         $${WINSPARKLE_DIR}/WinSparkle.dll \
         ../../colorfilters ../../dfilters ../../cfilters
 

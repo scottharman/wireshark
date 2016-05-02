@@ -46,16 +46,59 @@ static int hf_ac_if_hdr_ver = -1;
 static int hf_ac_if_hdr_total_len = -1;
 static int hf_ac_if_hdr_bInCollection = -1;
 static int hf_ac_if_hdr_if_num = -1;
+static int hf_ac_if_input_terminalid = -1;
+static int hf_ac_if_input_terminaltype = -1;
+static int hf_ac_if_input_assocterminal = -1;
+static int hf_ac_if_input_nrchannels = -1;
+static int hf_ac_if_input_channelconfig = -1;
+static int hf_ac_if_input_channelnames = -1;
+static int hf_ac_if_input_terminal = -1;
+static int hf_ac_if_output_terminalid = -1;
+static int hf_ac_if_output_terminaltype = -1;
+static int hf_ac_if_output_assocterminal = -1;
+static int hf_ac_if_output_sourceid = -1;
+static int hf_ac_if_output_terminal = -1;
+static int hf_ac_if_fu_unitid = -1;
+static int hf_ac_if_fu_sourceid = -1;
+static int hf_ac_if_fu_controlsize = -1;
+static int hf_ac_if_fu_controls = -1;
+static int hf_ac_if_fu_control = -1;
+static int hf_ac_if_fu_controls_d0 = -1;
+static int hf_ac_if_fu_controls_d1 = -1;
+static int hf_ac_if_fu_controls_d2 = -1;
+static int hf_ac_if_fu_controls_d3 = -1;
+static int hf_ac_if_fu_controls_d4 = -1;
+static int hf_ac_if_fu_controls_d5 = -1;
+static int hf_ac_if_fu_controls_d6 = -1;
+static int hf_ac_if_fu_controls_d7 = -1;
+static int hf_ac_if_fu_controls_d8 = -1;
+static int hf_ac_if_fu_controls_d9 = -1;
+static int hf_ac_if_fu_controls_rsv = -1;
+static int hf_ac_if_fu_ifeature = -1;
 static int hf_as_if_desc_subtype = -1;
 static int hf_as_if_gen_term_id = -1;
 static int hf_as_if_gen_delay = -1;
 static int hf_as_if_gen_format = -1;
+static int hf_as_if_ft_formattype = -1;
+static int hf_as_if_ft_maxbitrate = -1;
+static int hf_as_if_ft_nrchannels = -1;
+static int hf_as_if_ft_subframesize = -1;
+static int hf_as_if_ft_bitresolution = -1;
+static int hf_as_if_ft_samplesperframe = -1;
+static int hf_as_if_ft_samfreqtype = -1;
+static int hf_as_if_ft_lowersamfreq = -1;
+static int hf_as_if_ft_uppersamfreq = -1;
+static int hf_as_if_ft_samfreq = -1;
 static int hf_as_ep_desc_subtype = -1;
 
 static reassembly_table midi_data_reassembly_table;
 
 static gint ett_usb_audio      = -1;
 static gint ett_usb_audio_desc = -1;
+
+static gint ett_ac_if_fu_controls = -1;
+static gint ett_ac_if_fu_controls0 = -1;
+static gint ett_ac_if_fu_controls1 = -1;
 
 static dissector_handle_t sysex_handle;
 
@@ -137,6 +180,75 @@ static const value_string as_subtype_vals[] = {
 };
 static value_string_ext as_subtype_vals_ext =
     VALUE_STRING_EXT_INIT(as_subtype_vals);
+
+/* From http://www.usb.org/developers/docs/devclass_docs/termt10.pdf */
+static const value_string terminal_types_vals[] = {
+    /* USB Terminal Types */
+    {0x0100, "USB Undefined"},
+    {0x0101, "USB Streaming"},
+    {0x01FF, "USB vendor specific"},
+    /* Input Terminal Tyoes */
+    {0x0200, "Input Undefined"},
+    {0x0201, "Microphone"},
+    {0x0202, "Desktop Microphone"},
+    {0x0203, "Personal microphone"},
+    {0x0204, "Omni-directional icrophone"},
+    {0x0205, "Microphone array"},
+    {0x0206, "Processing microphone array"},
+    {0x0300, "Output Undefined"},
+    {0x0301, "Speaker"},
+    {0x0302, "Headphones"},
+    {0x0303, "Head Mounted Display Audio"},
+    {0x0304, "Desktop speaker"},
+    {0x0305, "Room speaker"},
+    {0x0306, "Communication speaker"},
+    {0x0307, "Low frequency effects speaker"},
+    /* Bi-directional Terminal Types */
+    {0x0400, "Bi-directional Undefined"},
+    {0x0401, "Handset"},
+    {0x0402, "Headset"},
+    {0x0403, "Speakerphone, no echoreduction"},
+    {0x0404, "Echo-suppressing speakerphone"},
+    {0x0405, "Echo-canceling speakerphone"},
+    /* Telephony Terminal Types */
+    {0x0500, "Telephony Undefined"},
+    {0x0501, "Phone line"},
+    {0x0502, "Telephone"},
+    {0x0503, "Down Line Pone"},
+    /* External Terminal Types */
+    {0x0600, "External Undefined"},
+    {0x0601, "Analog connector"},
+    {0x0602, "Digital audio interface"},
+    {0x0603, "Line connector"},
+    {0x0604, "Legacy audio connector"},
+    {0x0605, "S/PDIF interface"},
+    {0x0606, "1394 DA stream"},
+    {0x0607, "1394 DV stream soudtrack"},
+    /* Embedded Funciton Terminal Types */
+    {0x0700, "Embedded Undefined"},
+    {0x0701, "Level Calibration Noise Source"},
+    {0x0702, "Equalization Noise"},
+    {0x0703, "CD player"},
+    {0x0704, "DAT"},
+    {0x0705, "DCC"},
+    {0x0706, "MiniDisk"},
+    {0x0707, "Analog Tape"},
+    {0x0708, "Phonograph"},
+    {0x0709, "VCR Audio"},
+    {0x070A, "Video Disc Audio"},
+    {0x070B, "DVD Audio"},
+    {0x070C, "TV Tuner Audio"},
+    {0x070D, "Satellite Receiver Audio"},
+    {0x070E, "cable Tuner Audio"},
+    {0x070F, "DSS Audio"},
+    {0x0710, "Radio Receiver"},
+    {0x0711, "Radio Transmitter"},
+    {0x0712, "Multi-track Recorder"},
+    {0x0713, "Synthesizer"},
+    {0,NULL}
+};
+static value_string_ext terminal_types_vals_ext =
+    VALUE_STRING_EXT_INIT(terminal_types_vals);
 
 typedef struct _audio_conv_info_t {
     /* the major version of the USB audio class specification,
@@ -350,6 +462,116 @@ dissect_ac_if_hdr_body(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
     return offset-offset_start;
 }
 
+static gint
+dissect_ac_if_input_terminal(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
+        proto_tree *tree, usb_conv_info_t *usb_conv_info _U_)
+{
+    gint     offset_start;
+    offset_start = offset;
+
+    proto_tree_add_item(tree, hf_ac_if_input_terminalid, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_input_terminaltype, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    proto_tree_add_item(tree, hf_ac_if_input_assocterminal, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_input_nrchannels, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_input_channelconfig, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    proto_tree_add_item(tree, hf_ac_if_input_channelnames, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_input_terminal, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    return offset-offset_start;
+}
+
+static gint
+dissect_ac_if_output_terminal(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
+        proto_tree *tree, usb_conv_info_t *usb_conv_info _U_)
+{
+    gint     offset_start;
+    offset_start = offset;
+
+    proto_tree_add_item(tree, hf_ac_if_output_terminalid, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_output_terminaltype, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+    offset += 2;
+
+    proto_tree_add_item(tree, hf_ac_if_output_assocterminal, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_output_sourceid, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_output_terminal, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    return offset-offset_start;
+}
+
+static gint
+dissect_ac_if_feature_unit(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
+        proto_tree *tree, usb_conv_info_t *usb_conv_info _U_)
+{
+    gint     offset_start;
+    guint8 controlsize;
+    proto_tree *bitmap_tree;
+    proto_item *ti;
+
+    static const int *fu_controls0[] = {
+        &hf_ac_if_fu_controls_d0,
+        &hf_ac_if_fu_controls_d1,
+        &hf_ac_if_fu_controls_d2,
+        &hf_ac_if_fu_controls_d3,
+        &hf_ac_if_fu_controls_d4,
+        &hf_ac_if_fu_controls_d5,
+        &hf_ac_if_fu_controls_d6,
+        &hf_ac_if_fu_controls_d7,
+        NULL };
+
+    static const int *fu_controls1[] = {
+        &hf_ac_if_fu_controls_d8,
+        &hf_ac_if_fu_controls_d9,
+        &hf_ac_if_fu_controls_rsv,
+        NULL };
+
+    offset_start = offset;
+
+    proto_tree_add_item(tree, hf_ac_if_fu_unitid, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_fu_sourceid, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    proto_tree_add_item(tree, hf_ac_if_fu_controlsize, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    controlsize = tvb_get_guint8(tvb, offset) + 1;
+    offset += 1;
+
+    ti = proto_tree_add_item(tree, hf_ac_if_fu_controls, tvb, offset, controlsize, ENC_NA);
+    bitmap_tree = proto_item_add_subtree(ti, ett_ac_if_fu_controls);
+
+    proto_tree_add_bitmask(bitmap_tree, tvb, offset, hf_ac_if_fu_control, ett_ac_if_fu_controls0, fu_controls0, ENC_LITTLE_ENDIAN);
+
+    if(controlsize >= 1){
+        proto_tree_add_bitmask(bitmap_tree, tvb, offset + 1, hf_ac_if_fu_control, ett_ac_if_fu_controls1, fu_controls1, ENC_LITTLE_ENDIAN);
+    }
+
+    offset += controlsize;
+
+    proto_tree_add_item(tree, hf_ac_if_fu_ifeature, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    offset += 1;
+
+    return offset-offset_start;
+}
 
 static gint
 dissect_as_if_general_body(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
@@ -380,6 +602,85 @@ dissect_as_if_general_body(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
     return offset-offset_start;
 }
 
+static gint
+dissect_as_if_format_type_body(tvbuff_t *tvb, gint offset, packet_info *pinfo _U_,
+        proto_tree *tree, usb_conv_info_t *usb_conv_info)
+{
+    audio_conv_info_t *audio_conv_info;
+    gint               offset_start;
+    guint8 SamFreqType;
+    guint8 format_type;
+
+    /* the caller has already checked that usb_conv_info!=NULL */
+    audio_conv_info = (audio_conv_info_t *)usb_conv_info->class_data;
+    if (!audio_conv_info)
+        return 0;
+
+    offset_start = offset;
+
+    proto_tree_add_item(tree, hf_as_if_ft_formattype, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+    format_type = tvb_get_guint8(tvb, offset);
+    offset++;
+
+
+    switch(format_type){
+        case 1:
+            proto_tree_add_item(tree, hf_as_if_ft_nrchannels, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+            offset += 1;
+
+            proto_tree_add_item(tree, hf_as_if_ft_subframesize, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+            offset += 1;
+
+            proto_tree_add_item(tree, hf_as_if_ft_bitresolution, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+            offset += 1;
+
+            proto_tree_add_item(tree, hf_as_if_ft_samfreqtype, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+            SamFreqType = tvb_get_guint8(tvb, offset);
+            offset++;
+
+            if(SamFreqType == 0){
+                proto_tree_add_item(tree, hf_as_if_ft_lowersamfreq, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+                offset += 3;
+                proto_tree_add_item(tree, hf_as_if_ft_uppersamfreq, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+                offset += 3;
+            }else {
+                while(SamFreqType){
+                    proto_tree_add_item(tree, hf_as_if_ft_samfreq, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+                    offset += 3;
+                    SamFreqType--;
+                }
+            }
+        break;
+        case 2:
+            proto_tree_add_item(tree, hf_as_if_ft_maxbitrate, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+            offset += 2;
+
+            proto_tree_add_item(tree, hf_as_if_ft_samplesperframe, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+            offset += 2;
+
+            proto_tree_add_item(tree, hf_as_if_ft_samfreqtype, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+            SamFreqType = tvb_get_guint8(tvb, offset);
+            offset++;
+
+            if(SamFreqType == 0){
+                proto_tree_add_item(tree, hf_as_if_ft_lowersamfreq, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+                offset += 3;
+                proto_tree_add_item(tree, hf_as_if_ft_uppersamfreq, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+                offset += 3;
+            }else {
+                while(SamFreqType){
+                    proto_tree_add_item(tree, hf_as_if_ft_samfreq, tvb, offset, 3, ENC_LITTLE_ENDIAN);
+                    offset += 3;
+                    SamFreqType--;
+                }
+            }
+        break;
+        default:
+        break;
+    }
+
+    return offset-offset_start;
+}
 
 static gint
 dissect_usb_audio_descriptor(tvbuff_t *tvb, packet_info *pinfo,
@@ -428,7 +729,17 @@ dissect_usb_audio_descriptor(tvbuff_t *tvb, packet_info *pinfo,
                    we rely on the descriptor's length byte instead */
                 dissect_ac_if_hdr_body(tvb, offset, pinfo, desc_tree, usb_conv_info);
                 break;
+            case AC_SUBTYPE_INPUT_TERMINAL:
+                dissect_ac_if_input_terminal(tvb, offset, pinfo, desc_tree, usb_conv_info);
+                break;
+            case AC_SUBTYPE_OUTPUT_TERMINAL:
+                dissect_ac_if_output_terminal(tvb, offset, pinfo, desc_tree, usb_conv_info);
+                break;
+            case AC_SUBTYPE_FEATURE_UNIT:
+                dissect_ac_if_feature_unit(tvb, offset, pinfo, desc_tree, usb_conv_info);
+                break;
             default:
+                proto_tree_add_expert(desc_tree, pinfo, &ei_usb_audio_undecoded, tvb, offset-3, desc_len);
                 break;
         }
 
@@ -457,7 +768,12 @@ dissect_usb_audio_descriptor(tvbuff_t *tvb, packet_info *pinfo,
                 dissect_as_if_general_body(tvb, offset, pinfo,
                         desc_tree, usb_conv_info);
                 break;
+            case AS_SUBTYPE_FORMAT_TYPE:
+                dissect_as_if_format_type_body(tvb, offset, pinfo,
+                        desc_tree, usb_conv_info);
+                break;
             default:
+                proto_tree_add_expert(desc_tree, pinfo, &ei_usb_audio_undecoded, tvb, offset-3, desc_len);
                 break;
         }
     }
@@ -566,6 +882,93 @@ proto_register_usb_audio(void)
         { &hf_ac_if_hdr_if_num,
             { "Interface number", "usbaudio.ac_if_hdr.baInterfaceNr",
               FT_UINT8, BASE_DEC, NULL, 0x00, "baInterfaceNr", HFILL }},
+        { &hf_ac_if_input_terminalid,
+            { "Terminal ID", "usbaudio.ac_if_input.bTerminalID",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bTerminalID", HFILL }},
+        { &hf_ac_if_input_terminaltype,
+            { "Terminal Type", "usbaudio.ac_if_input.wTerminalType", FT_UINT16,
+              BASE_HEX|BASE_EXT_STRING, &terminal_types_vals_ext, 0x00, "wTerminalType", HFILL }},
+        { &hf_ac_if_input_assocterminal,
+            { "Assoc Terminal", "usbaudio.ac_if_input.bAssocTerminal",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bAssocTerminal", HFILL }},
+        { &hf_ac_if_input_nrchannels,
+            { "Number Channels", "usbaudio.ac_if_input.bNrChannels",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bNrChannels", HFILL }},
+        { &hf_ac_if_input_channelconfig,
+            { "Channel Config", "usbaudio.ac_if_input.wChannelConfig",
+              FT_UINT16, BASE_HEX, NULL, 0x00, "wChannelConfig", HFILL }},
+        { &hf_ac_if_input_channelnames,
+            { "Channel Names", "usbaudio.ac_if_input.iChannelNames",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "iChannelNames", HFILL }},
+        { &hf_ac_if_input_terminal,
+            { "Terminal", "usbaudio.ac_if_input.iTerminal",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "iTerminal", HFILL }},
+        { &hf_ac_if_output_terminalid,
+            { "Terminal ID", "usbaudio.ac_if_output.bTerminalID",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bTerminalID", HFILL }},
+        { &hf_ac_if_output_terminaltype,
+            { "Terminal Type", "usbaudio.ac_if_output.wTerminalType", FT_UINT16,
+               BASE_HEX|BASE_EXT_STRING, &terminal_types_vals_ext, 0x00, "wTerminalType", HFILL }},
+        { &hf_ac_if_output_assocterminal,
+            { "Assoc Terminal", "usbaudio.ac_if_output.bAssocTerminal",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bAssocTerminal", HFILL }},
+        { &hf_ac_if_output_sourceid,
+            { "Source ID", "usbaudio.ac_if_output.bSourceID",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bSourceID", HFILL }},
+        { &hf_ac_if_output_terminal,
+            { "Terminal", "usbaudio.ac_if_output.iTerminal",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "iTerminal", HFILL }},
+        { &hf_ac_if_fu_unitid,
+            { "Unit ID", "usbaudio.ac_if_fu.bUnitID",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bUnitID", HFILL }},
+        { &hf_ac_if_fu_sourceid,
+            { "Source ID", "usbaudio.ac_if_fu.bSourceID",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bSourceID", HFILL }},
+        { &hf_ac_if_fu_controlsize,
+            { "Control Size", "usbaudio.ac_if_fu.bControlSize",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bControlSize", HFILL }},
+        { &hf_ac_if_fu_controls,
+            { "Controls", "usbaudio.ac_if_fu.bmaControls",
+              FT_BYTES, BASE_NONE, NULL, 0x00, "bmaControls", HFILL }},
+        { &hf_ac_if_fu_control,
+            { "Control", "usbaudio.ac_if_fu.bmaControl",
+              FT_UINT8, BASE_HEX, NULL, 0x00, "bmaControls", HFILL }},
+        { &hf_ac_if_fu_controls_d0,
+            { "Mute", "usbaudio.ac_if_fu.bmaControls.d0",
+              FT_BOOLEAN, 8, NULL, 0x01, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d1,
+            { "Volume", "usbaudio.ac_if_fu.bmaControls.d1",
+              FT_BOOLEAN, 8, NULL, 0x02, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d2,
+            { "Bass", "usbaudio.ac_if_fu.bmaControls.d2",
+              FT_BOOLEAN, 8, NULL, 0x04, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d3,
+            { "Mid", "usbaudio.ac_if_fu.bmaControls.d3",
+              FT_BOOLEAN, 8, NULL, 0x08, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d4,
+            { "Treble", "usbaudio.ac_if_fu.bmaControls.d4",
+              FT_BOOLEAN, 8, NULL, 0x10, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d5,
+            { "Graphic Equalizer", "usbaudio.ac_if_fu.bmaControls.d5",
+              FT_BOOLEAN, 8, NULL, 0x20, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d6,
+            { "Automatic Gain", "usbaudio.ac_if_fu.bmaControls.d6",
+              FT_BOOLEAN, 8, NULL, 0x40, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d7,
+            { "Delay", "usbaudio.ac_if_fu.bmaControls.d7",
+              FT_BOOLEAN, 8, NULL, 0x80, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d8,
+            { "Bass Boost", "usbaudio.ac_if_fu.bmaControls.d8",
+              FT_BOOLEAN, 8, NULL, 0x01, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_d9,
+            { "Loudness", "usbaudio.ac_if_fu.bmaControls.d9",
+              FT_BOOLEAN, 8, NULL, 0x02, NULL, HFILL }},
+        { &hf_ac_if_fu_controls_rsv,
+            { "Reserved", "usbaudio.ac_if_fu.bmaControls.rsv",
+              FT_UINT8, BASE_HEX, NULL, 0xFC, "Must be zero", HFILL }},
+        { &hf_ac_if_fu_ifeature,
+            { "Feature", "usbaudio.ac_if_fu.iFeature",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "iFeature", HFILL }},
         { &hf_as_if_desc_subtype,
             { "Subtype", "usbaudio.as_if_subtype", FT_UINT8, BASE_HEX|BASE_EXT_STRING,
                 &as_subtype_vals_ext, 0x00, "bDescriptorSubtype", HFILL }},
@@ -578,6 +981,36 @@ proto_register_usb_audio(void)
         { &hf_as_if_gen_format,
             { "Format", "usbaudio.as_if_gen.wFormatTag",
               FT_UINT16, BASE_HEX, NULL, 0x00, "wFormatTag", HFILL }},
+        { &hf_as_if_ft_formattype,
+            { "FormatType", "usbaudio.as_if_ft.bFormatType",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "wFormatType", HFILL }},
+        { &hf_as_if_ft_maxbitrate,
+            { "Max Bit Rate", "usbaudio.as_if_ft.wMaxBitRate",
+              FT_UINT16, BASE_DEC, NULL, 0x00, "wMaxBitRate", HFILL }},
+        { &hf_as_if_ft_nrchannels,
+            { "Number Channels", "usbaudio.as_if_ft.bNrChannels",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bNrChannels", HFILL }},
+        { &hf_as_if_ft_subframesize,
+            { "Subframe Size", "usbaudio.as_if_ft.bSubframeSize",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bSubframeSize", HFILL }},
+        { &hf_as_if_ft_bitresolution,
+            { "Bit Resolution", "usbaudio.as_if_ft.bBitResolution",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bBitResolution", HFILL }},
+        { &hf_as_if_ft_samplesperframe,
+            { "Samples Per Frame", "usbaudio.as_if_ft.wSamplesPerFrame",
+              FT_UINT16, BASE_DEC, NULL, 0x00, "wSamplesPerFrame", HFILL }},
+        { &hf_as_if_ft_samfreqtype,
+            { "Samples Frequence Type", "usbaudio.as_if_ft.bSamFreqType",
+              FT_UINT8, BASE_DEC, NULL, 0x00, "bSamFreqType", HFILL }},
+        { &hf_as_if_ft_lowersamfreq,
+            { "Lower Samples Frequence", "usbaudio.as_if_ft.tLowerSamFreq",
+              FT_UINT24, BASE_DEC, NULL, 0x00, "tLowerSamFreq", HFILL }},
+        { &hf_as_if_ft_uppersamfreq,
+            { "Upper Samples Frequence", "usbaudio.as_if_ft.tUpperSamFreq",
+              FT_UINT24, BASE_DEC, NULL, 0x00, "tUpperSamFreq", HFILL }},
+        { &hf_as_if_ft_samfreq,
+            { "Samples Frequence", "usbaudio.as_if_ft.tSamFreq",
+              FT_UINT24, BASE_DEC, NULL, 0x00, "tSamFreq", HFILL }},
         { &hf_as_ep_desc_subtype,
             { "Subtype", "usbaudio.as_ep_subtype", FT_UINT8,
                 BASE_HEX, NULL, 0x00, "bDescriptorSubtype", HFILL }},
@@ -623,7 +1056,10 @@ proto_register_usb_audio(void)
         &ett_usb_audio,
         &ett_usb_audio_desc,
         &ett_sysex_msg_fragment,
-        &ett_sysex_msg_fragments
+        &ett_sysex_msg_fragments,
+        &ett_ac_if_fu_controls,
+        &ett_ac_if_fu_controls0,
+        &ett_ac_if_fu_controls1
     };
 
     static ei_register_info ei[] = {

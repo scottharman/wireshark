@@ -158,6 +158,7 @@ static gint ett_device_id_object_items = -1;
 
 static expert_field ei_mbrtu_crc16_incorrect = EI_INIT;
 static expert_field ei_modbus_data_decode = EI_INIT;
+static expert_field ei_mbtcp_cannot_classify = EI_INIT;
 
 static dissector_handle_t modbus_handle;
 static dissector_handle_t mbtcp_handle;
@@ -214,59 +215,54 @@ classify_mbrtu_packet(packet_info *pinfo, tvbuff_t *tvb)
         return QUERY_PACKET;
 
 
-    /* Special case for serial-captured packets that don't have an Ethernet header */
+    /* We may not have an Ethernet header or unique ports. */
     /* Dig into these a little deeper to try to guess the message type */
-    if (!pinfo->srcport) {
-        /* The 'exception' bit is set, so this is a response */
-        if (func & 0x80) {
-            return RESPONSE_PACKET;
-        }
-        switch (func) {
-            case READ_COILS:
-            case READ_DISCRETE_INPUTS:
-                /* Only possible to get a response message of 8 bytes with Discrete or Coils */
-                if (len == 8) {
-                    /* If this is, in fact, a response then the data byte count will be 3 */
-                    /* This will correctly identify all messages except for those that are discrete or coil polls */
-                    /* where the base address range happens to have 0x03 in the upper 16-bit address register     */
-                    if (tvb_get_guint8(tvb, 2) == 3) {
-                        return RESPONSE_PACKET;
-                    }
-                    else {
-                        return QUERY_PACKET;
-                    }
-                }
-                else {
-                    return RESPONSE_PACKET;
-                }
-                break;
 
-            case READ_HOLDING_REGS:
-            case READ_INPUT_REGS:
-            case WRITE_SINGLE_COIL:
-            case WRITE_SINGLE_REG:
-                if (len == 8) {
-                    return QUERY_PACKET;
-                }
-                else {
-                    return RESPONSE_PACKET;
-                }
-                break;
-
-            case WRITE_MULT_REGS:
-            case WRITE_MULT_COILS:
-                if (len == 8) {
+    /* The 'exception' bit is set, so this is a response */
+    if (func & 0x80) {
+        return RESPONSE_PACKET;
+    }
+    switch (func) {
+        case READ_COILS:
+        case READ_DISCRETE_INPUTS:
+            /* Only possible to get a response message of 8 bytes with Discrete or Coils */
+            if (len == 8) {
+                /* If this is, in fact, a response then the data byte count will be 3 */
+                /* This will correctly identify all messages except for those that are discrete or coil polls */
+                /* where the base address range happens to have 0x03 in the upper 16-bit address register     */
+                if (tvb_get_guint8(tvb, 2) == 3) {
                     return RESPONSE_PACKET;
                 }
                 else {
                     return QUERY_PACKET;
                 }
-                break;
+            }
+            else {
+                return RESPONSE_PACKET;
+            }
+            break;
 
-            default:
-                return CANNOT_CLASSIFY;
-                break;
-        }
+        case READ_HOLDING_REGS:
+        case READ_INPUT_REGS:
+        case WRITE_SINGLE_COIL:
+        case WRITE_SINGLE_REG:
+            if (len == 8) {
+                return QUERY_PACKET;
+            }
+            else {
+                return RESPONSE_PACKET;
+            }
+            break;
+
+        case WRITE_MULT_REGS:
+        case WRITE_MULT_COILS:
+            if (len == 8) {
+                return RESPONSE_PACKET;
+            }
+            else {
+                return QUERY_PACKET;
+            }
+            break;
     }
 
 
@@ -496,6 +492,9 @@ dissect_mbtcp_pdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* dat
     mi = proto_tree_add_protocol_format(tree, proto_mbtcp, tvb, offset,
             len+6, "Modbus/TCP");
     mbtcp_tree = proto_item_add_subtree(mi, ett_mbtcp);
+
+    if (packet_type == CANNOT_CLASSIFY)
+        expert_add_info(pinfo, mi, &ei_mbtcp_cannot_classify);
 
     /* Add items to protocol tree specific to Modbus/TCP */
     proto_tree_add_uint(mbtcp_tree, hf_mbtcp_transid, tvb, offset, 2, transaction_id);
@@ -776,6 +775,18 @@ dissect_mbrtu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
                      get_mbrtu_pdu_len, dissect_mbrtu_pdu, data);
 
     return tvb_captured_length(tvb);
+}
+
+static int
+dissect_mbrtu_udp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
+{
+
+    /* Make sure there's at least enough data to determine it's a Modbus packet */
+    /* 5 bytes is the smallest possible valid message (exception response) */
+    if (tvb_reported_length(tvb) < 5)
+        return 0;
+
+    return dissect_mbrtu_pdu(tvb, pinfo, tree, data);
 }
 
 
@@ -1556,6 +1567,13 @@ proto_register_modbus(void)
         },
     };
 
+    static ei_register_info mbtcp_ei[] = {
+        { &ei_mbtcp_cannot_classify,
+          { "mbtcp.cannot_classify", PI_PROTOCOL, PI_WARN,
+            "Cannot classify packet type. Try setting Modbus/TCP Port preference to this destination or source port", EXPFILL }
+        },
+    };
+
     /* Modbus RTU header fields */
     static hf_register_info mbrtu_hf[] = {
         { &hf_mbrtu_unitid,
@@ -1898,6 +1916,7 @@ proto_register_modbus(void)
     module_t *mbtcp_module;
     module_t *mbrtu_module;
     module_t *modbus_module;
+    expert_module_t* expert_mbtcp;
     expert_module_t* expert_mbrtu;
     expert_module_t* expert_modbus;
 
@@ -1920,6 +1939,8 @@ proto_register_modbus(void)
     proto_register_field_array(proto_mbrtu, mbrtu_hf, array_length(mbrtu_hf));
     proto_register_field_array(proto_modbus, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
+    expert_mbtcp = expert_register_protocol(proto_mbtcp);
+    expert_register_field_array(expert_mbtcp, mbtcp_ei, array_length(mbtcp_ei));
     expert_mbrtu = expert_register_protocol(proto_mbrtu);
     expert_register_field_array(expert_mbrtu, mbrtu_ei, array_length(mbrtu_ei));
     expert_modbus = expert_register_protocol(proto_modbus);
@@ -1957,7 +1978,7 @@ proto_register_modbus(void)
 
     /* Modbus RTU Preference - Default TCP Port, defaults to zero, allows custom user port. */
     prefs_register_uint_preference(mbrtu_module, "tcp.port", "Modbus RTU Port",
-                       "Set the TCP port for encapsulated Modbus RTU packets",
+                       "Set the TCP/UDP port for encapsulated Modbus RTU packets",
                        10, &global_mbus_rtu_port);
 
     /* Modbus Preference - Holding/Input Register format, this allows for deeper dissection of response data */
@@ -2006,15 +2027,18 @@ void
 proto_reg_handoff_mbrtu(void)
 {
     static unsigned int mbrtu_port = 0;
+    dissector_handle_t mbrtu_udp_handle = create_dissector_handle(dissect_mbrtu_udp, proto_mbrtu);
 
     /* Make sure to use Modbus RTU Preferences field to determine default TCP port */
 
     if(mbrtu_port != 0 && mbrtu_port != global_mbus_rtu_port){
         dissector_delete_uint("tcp.port", mbrtu_port, mbrtu_handle);
+        dissector_delete_uint("udp.port", mbrtu_port, mbrtu_udp_handle);
     }
 
     if(global_mbus_rtu_port != 0 && mbrtu_port != global_mbus_rtu_port) {
         dissector_add_uint("tcp.port", global_mbus_rtu_port, mbrtu_handle);
+        dissector_add_uint("udp.port", global_mbus_rtu_port, mbrtu_udp_handle);
     }
 
     mbrtu_port = global_mbus_rtu_port;
