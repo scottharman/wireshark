@@ -49,8 +49,10 @@ class OsbProxyStyle : public QProxyStyle
   public:
     // Hack to keep the scrollbar from disappearing on OS X. We should
     // handle this more gracefully.
-    virtual int styleHint(StyleHint hint, const QStyleOption *option = Q_NULLPTR, const QWidget *widget = Q_NULLPTR, QStyleHintReturn *returnData = Q_NULLPTR) const {
+    virtual int styleHint(StyleHint hint, const QStyleOption *option = NULL, const QWidget *widget = NULL, QStyleHintReturn *returnData = NULL) const {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 3, 0)
         if (hint == SH_ScrollBar_Transient) return false;
+#endif
 
         return QProxyStyle::styleHint(hint, option, widget, returnData);
     }
@@ -193,9 +195,9 @@ bool OverlayScrollBar::eventFilter(QObject *watched, QEvent *event)
         ret = true;
 
         if (!marked_packet_img_.isNull()) {
-            qreal dp_ratio = 1.0;
             QRect groove_rect = grooveRect();
 #if QT_VERSION >= QT_VERSION_CHECK(5, 1, 0)
+            qreal dp_ratio = 1.0;
             dp_ratio = devicePixelRatio();
             groove_rect.setTopLeft(groove_rect.topLeft() * dp_ratio);
             groove_rect.setSize(groove_rect.size() * dp_ratio);

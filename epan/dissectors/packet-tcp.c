@@ -410,6 +410,9 @@ static gboolean tcp_no_subdissector_on_error = TRUE;
  */
 static gboolean tcp_exp_options_with_magic = TRUE;
 
+/* Process info, currently discovered via IPFIX */
+static gboolean tcp_display_process_info = FALSE;
+
 /*
  *  TCP option
  */
@@ -914,17 +917,24 @@ init_tcp_conversation_data(packet_info *pinfo)
     tcpd->flow1.win_scale=-1;
     tcpd->flow1.window = G_MAXUINT32;
     tcpd->flow1.multisegment_pdus=wmem_tree_new(wmem_file_scope());
-    /*
-    tcpd->flow1.username = NULL;
-    tcpd->flow1.command = NULL;
-    */
+
     tcpd->flow2.window = G_MAXUINT32;
     tcpd->flow2.win_scale=-1;
     tcpd->flow2.multisegment_pdus=wmem_tree_new(wmem_file_scope());
-    /*
-    tcpd->flow2.username = NULL;
-    tcpd->flow2.command = NULL;
-    */
+
+    /* Only allocate the data if its actually going to be analyzed */
+    if (tcp_analyze_seq)
+    {
+        tcpd->flow1.tcp_analyze_seq_info = wmem_new0(wmem_file_scope(), struct tcp_analyze_seq_flow_info_t);
+        tcpd->flow2.tcp_analyze_seq_info = wmem_new0(wmem_file_scope(), struct tcp_analyze_seq_flow_info_t);
+    }
+    /* Only allocate the data if its actually going to be displayed */
+    if (tcp_display_process_info)
+    {
+        tcpd->flow1.process_info = wmem_new0(wmem_file_scope(), struct tcp_process_info_t);
+        tcpd->flow2.process_info = wmem_new0(wmem_file_scope(), struct tcp_process_info_t);
+    }
+
     tcpd->acked_table=wmem_tree_new(wmem_file_scope());
     tcpd->ts_first.secs=pinfo->abs_ts.secs;
     tcpd->ts_first.nsecs=pinfo->abs_ts.nsecs;
@@ -1030,6 +1040,9 @@ add_tcp_process_info(guint32 frame_num, address *local_addr, address *remote_add
     struct tcp_analysis *tcpd;
     tcp_flow_t *flow = NULL;
 
+    if (!tcp_display_process_info)
+        return;
+
     conv = find_conversation(frame_num, local_addr, remote_addr, PT_TCP, local_port, remote_port, 0);
     if (!conv) {
         return;
@@ -1045,14 +1058,17 @@ add_tcp_process_info(guint32 frame_num, address *local_addr, address *remote_add
     } else if (cmp_address(remote_addr, &conv->key_ptr->addr1) == 0 && remote_port == conv->key_ptr->port1) {
         flow = &tcpd->flow2;
     }
-    if (!flow || flow->command) {
+    if (!flow || (flow->process_info && flow->process_info->command)) {
         return;
     }
 
-    flow->process_uid = uid;
-    flow->process_pid = pid;
-    flow->username = wmem_strdup(wmem_file_scope(), username);
-    flow->command = wmem_strdup(wmem_file_scope(), command);
+    if (flow->process_info == NULL)
+        flow->process_info = wmem_new0(wmem_file_scope(), struct tcp_process_info_t);
+
+    flow->process_info->process_uid = uid;
+    flow->process_info->process_pid = pid;
+    flow->process_info->username = wmem_strdup(wmem_file_scope(), username);
+    flow->process_info->command = wmem_strdup(wmem_file_scope(), command);
 }
 
 /* Return the current stream count */
@@ -1395,7 +1411,7 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
      *  the segment is exactly 1 byte
      */
     if( seglen==1
-    &&  seq==tcpd->fwd->nextseq
+    &&  seq==tcpd->fwd->tcp_analyze_seq_info->nextseq
     &&  tcpd->rev->window==0 ) {
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1425,8 +1441,8 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
      * one.
      * RST packets are not checked for this.
      */
-    if( tcpd->fwd->nextseq
-    &&  GT_SEQ(seq, tcpd->fwd->nextseq)
+    if( tcpd->fwd->tcp_analyze_seq_info->nextseq
+    &&  GT_SEQ(seq, tcpd->fwd->tcp_analyze_seq_info->nextseq)
     &&  (flags&(TH_RST))==0 ) {
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1444,7 +1460,7 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
      * SYN/FIN/RST segments are never keepalives
      */
     if( (seglen==0||seglen==1)
-    &&  seq==(tcpd->fwd->nextseq-1)
+    &&  seq==(tcpd->fwd->tcp_analyze_seq_info->nextseq-1)
     &&  (flags&(TH_SYN|TH_FIN|TH_RST))==0 ) {
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1459,8 +1475,8 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
     if( seglen==0
     &&  window
     &&  window!=tcpd->fwd->window
-    &&  seq==tcpd->fwd->nextseq
-    &&  ack==tcpd->fwd->lastack
+    &&  seq==tcpd->fwd->tcp_analyze_seq_info->nextseq
+    &&  ack==tcpd->fwd->tcp_analyze_seq_info->lastack
     &&  (flags&(TH_SYN|TH_FIN|TH_RST))==0 ) {
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1478,7 +1494,7 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
      */
     if( seglen>0
     &&  tcpd->rev->win_scale!=-1
-    &&  (seq+seglen)==(tcpd->rev->lastack+(tcpd->rev->window<<(tcpd->rev->win_scale==-2?0:tcpd->rev->win_scale)))
+    &&  (seq+seglen)==(tcpd->rev->tcp_analyze_seq_info->lastack+(tcpd->rev->window<<(tcpd->rev->win_scale==-2?0:tcpd->rev->win_scale)))
     &&  (flags&(TH_SYN|TH_FIN|TH_RST))==0 ) {
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1494,8 +1510,8 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
     if( seglen==0
     &&  window
     &&  window==tcpd->fwd->window
-    &&  seq==tcpd->fwd->nextseq
-    &&  ack==tcpd->fwd->lastack
+    &&  seq==tcpd->fwd->tcp_analyze_seq_info->nextseq
+    &&  ack==tcpd->fwd->tcp_analyze_seq_info->lastack
     && (tcpd->rev->lastsegmentflags&TCP_A_KEEP_ALIVE)
     &&  (flags&(TH_SYN|TH_FIN|TH_RST))==0 ) {
         if(!tcpd->ta) {
@@ -1514,8 +1530,8 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
     if( seglen==0
     &&  window==0
     &&  window==tcpd->fwd->window
-    &&  seq==tcpd->fwd->nextseq
-    &&  ack==tcpd->fwd->lastack
+    &&  seq==tcpd->fwd->tcp_analyze_seq_info->nextseq
+    &&  ack==tcpd->fwd->tcp_analyze_seq_info->lastack
     && (tcpd->rev->lastsegmentflags&TCP_A_ZERO_WINDOW_PROBE)
     &&  (flags&(TH_SYN|TH_FIN|TH_RST))==0 ) {
         if(!tcpd->ta) {
@@ -1533,25 +1549,25 @@ tcp_analyze_sequence_number(packet_info *pinfo, guint32 seq, guint32 ack, guint3
     if( seglen==0
     &&  window
     &&  window==tcpd->fwd->window
-    &&  seq==tcpd->fwd->nextseq
-    &&  ack==tcpd->fwd->lastack
+    &&  seq==tcpd->fwd->tcp_analyze_seq_info->nextseq
+    &&  ack==tcpd->fwd->tcp_analyze_seq_info->lastack
     &&  (flags&(TH_SYN|TH_FIN|TH_RST))==0 ) {
-        tcpd->fwd->dupacknum++;
+        tcpd->fwd->tcp_analyze_seq_info->dupacknum++;
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
         }
         tcpd->ta->flags|=TCP_A_DUPLICATE_ACK;
-        tcpd->ta->dupack_num=tcpd->fwd->dupacknum;
-        tcpd->ta->dupack_frame=tcpd->fwd->lastnondupack;
+        tcpd->ta->dupack_num=tcpd->fwd->tcp_analyze_seq_info->dupacknum;
+        tcpd->ta->dupack_frame=tcpd->fwd->tcp_analyze_seq_info->lastnondupack;
     }
 
 
 
 finished_fwd:
     /* If the ack number changed we must reset the dupack counters */
-    if( ack != tcpd->fwd->lastack ) {
-        tcpd->fwd->lastnondupack=pinfo->num;
-        tcpd->fwd->dupacknum=0;
+    if( ack != tcpd->fwd->tcp_analyze_seq_info->lastack ) {
+        tcpd->fwd->tcp_analyze_seq_info->lastnondupack=pinfo->num;
+        tcpd->fwd->tcp_analyze_seq_info->dupacknum=0;
     }
 
 
@@ -1563,8 +1579,8 @@ finished_fwd:
      * We only check this if we have actually seen some seq numbers
      * in the other direction.
      */
-    if( tcpd->rev->maxseqtobeacked
-    &&  GT_SEQ(ack, tcpd->rev->maxseqtobeacked )
+    if( tcpd->rev->tcp_analyze_seq_info->maxseqtobeacked
+    &&  GT_SEQ(ack, tcpd->rev->tcp_analyze_seq_info->maxseqtobeacked )
     &&  (flags&(TH_ACK))!=0 ) {
         if(!tcpd->ta) {
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1573,7 +1589,7 @@ finished_fwd:
         /* update 'max seq to be acked' in the other direction so we don't get
          * this indication again.
          */
-        tcpd->rev->maxseqtobeacked=tcpd->rev->nextseq;
+        tcpd->rev->tcp_analyze_seq_info->maxseqtobeacked=tcpd->rev->tcp_analyze_seq_info->nextseq;
     }
 
 
@@ -1587,8 +1603,8 @@ finished_fwd:
      * Note that a simple KeepAlive is not a retransmission
      */
     if( (seglen>0 || flags&(TH_SYN|TH_FIN))
-    &&  tcpd->fwd->nextseq
-    &&  (LT_SEQ(seq, tcpd->fwd->nextseq)) ) {
+    &&  tcpd->fwd->tcp_analyze_seq_info->nextseq
+    &&  (LT_SEQ(seq, tcpd->fwd->tcp_analyze_seq_info->nextseq)) ) {
         guint64 t;
         guint64 ooo_thres;
         if (tcpd->ts_first_rtt.nsecs == 0 && tcpd->ts_first_rtt.secs == 0)
@@ -1607,10 +1623,10 @@ finished_fwd:
          * duplicate ack
          * then this is a fast retransmission
          */
-        t=(pinfo->abs_ts.secs-tcpd->rev->lastacktime.secs)*1000000000;
-        t=t+(pinfo->abs_ts.nsecs)-tcpd->rev->lastacktime.nsecs;
-        if( tcpd->rev->dupacknum>=2
-        &&  tcpd->rev->lastack==seq
+        t=(pinfo->abs_ts.secs-tcpd->rev->tcp_analyze_seq_info->lastacktime.secs)*1000000000;
+        t=t+(pinfo->abs_ts.nsecs)-tcpd->rev->tcp_analyze_seq_info->lastacktime.nsecs;
+        if( tcpd->rev->tcp_analyze_seq_info->dupacknum>=2
+        &&  tcpd->rev->tcp_analyze_seq_info->lastack==seq
         &&  t<20000000 ) {
             if(!tcpd->ta) {
                 tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
@@ -1623,10 +1639,10 @@ finished_fwd:
          * seen sequence number and it doesn't look like a retransmission
          * then it is an OUT-OF-ORDER segment.
          */
-        t=(pinfo->abs_ts.secs-tcpd->fwd->nextseqtime.secs)*1000000000;
-        t=t+(pinfo->abs_ts.nsecs)-tcpd->fwd->nextseqtime.nsecs;
+        t=(pinfo->abs_ts.secs-tcpd->fwd->tcp_analyze_seq_info->nextseqtime.secs)*1000000000;
+        t=t+(pinfo->abs_ts.nsecs)-tcpd->fwd->tcp_analyze_seq_info->nextseqtime.nsecs;
         if( t < ooo_thres
-        && tcpd->fwd->nextseq != seq + seglen ) {
+        && tcpd->fwd->tcp_analyze_seq_info->nextseq != seq + seglen ) {
             if(!tcpd->ta) {
                 tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
             }
@@ -1638,7 +1654,7 @@ finished_fwd:
          * is less than or equal to the receiver's lastack, the packet contains
          * duplicate data and may be considered spurious.
          */
-        if ( seq + seglen <= tcpd->rev->lastack ) {
+        if ( seq + seglen <= tcpd->rev->tcp_analyze_seq_info->lastack ) {
             if(!tcpd->ta){
                 tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
             }
@@ -1651,21 +1667,21 @@ finished_fwd:
             tcp_analyze_get_acked_struct(pinfo->num, seq, ack, TRUE, tcpd);
         }
         tcpd->ta->flags|=TCP_A_RETRANSMISSION;
-        nstime_delta(&tcpd->ta->rto_ts, &pinfo->abs_ts, &tcpd->fwd->nextseqtime);
-        tcpd->ta->rto_frame=tcpd->fwd->nextseqframe;
+        nstime_delta(&tcpd->ta->rto_ts, &pinfo->abs_ts, &tcpd->fwd->tcp_analyze_seq_info->nextseqtime);
+        tcpd->ta->rto_frame=tcpd->fwd->tcp_analyze_seq_info->nextseqframe;
     }
 
 finished_checking_retransmission_type:
 
     nextseq = seq+seglen;
-    if ((seglen || flags&(TH_SYN|TH_FIN)) && tcpd->fwd->segment_count < TCP_MAX_UNACKED_SEGMENTS) {
+    if ((seglen || flags&(TH_SYN|TH_FIN)) && tcpd->fwd->tcp_analyze_seq_info->segment_count < TCP_MAX_UNACKED_SEGMENTS) {
         /* Add this new sequence number to the fwd list.  But only if there
 	 * aren't "too many" unacked segments (e.g., we're not seeing the ACKs).
 	 */
         ual = wmem_new(wmem_file_scope(), tcp_unacked_t);
-        ual->next=tcpd->fwd->segments;
-        tcpd->fwd->segments=ual;
-        tcpd->fwd->segment_count++;
+        ual->next=tcpd->fwd->tcp_analyze_seq_info->segments;
+        tcpd->fwd->tcp_analyze_seq_info->segments=ual;
+        tcpd->fwd->tcp_analyze_seq_info->segment_count++;
         ual->frame=pinfo->num;
         ual->seq=seq;
         ual->ts=pinfo->abs_ts;
@@ -1682,30 +1698,30 @@ finished_checking_retransmission_type:
      * If we don't have anything since before, just store what we got.
      * ZeroWindowProbes are special and don't really advance the nextseq
      */
-    if(GT_SEQ(nextseq, tcpd->fwd->nextseq) || !tcpd->fwd->nextseq) {
+    if(GT_SEQ(nextseq, tcpd->fwd->tcp_analyze_seq_info->nextseq) || !tcpd->fwd->tcp_analyze_seq_info->nextseq) {
         if( !tcpd->ta || !(tcpd->ta->flags&TCP_A_ZERO_WINDOW_PROBE) ) {
-            tcpd->fwd->nextseq=nextseq;
-            tcpd->fwd->nextseqframe=pinfo->num;
-            tcpd->fwd->nextseqtime.secs=pinfo->abs_ts.secs;
-            tcpd->fwd->nextseqtime.nsecs=pinfo->abs_ts.nsecs;
+            tcpd->fwd->tcp_analyze_seq_info->nextseq=nextseq;
+            tcpd->fwd->tcp_analyze_seq_info->nextseqframe=pinfo->num;
+            tcpd->fwd->tcp_analyze_seq_info->nextseqtime.secs=pinfo->abs_ts.secs;
+            tcpd->fwd->tcp_analyze_seq_info->nextseqtime.nsecs=pinfo->abs_ts.nsecs;
         }
     }
 
     /* Store the highest continuous seq number seen so far for 'max seq to be acked',
      so we can detect TCP_A_ACK_LOST_PACKET condition
      */
-    if(EQ_SEQ(seq, tcpd->fwd->maxseqtobeacked) || !tcpd->fwd->maxseqtobeacked) {
+    if(EQ_SEQ(seq, tcpd->fwd->tcp_analyze_seq_info->maxseqtobeacked) || !tcpd->fwd->tcp_analyze_seq_info->maxseqtobeacked) {
         if( !tcpd->ta || !(tcpd->ta->flags&TCP_A_ZERO_WINDOW_PROBE) ) {
-            tcpd->fwd->maxseqtobeacked=tcpd->fwd->nextseq;
+            tcpd->fwd->tcp_analyze_seq_info->maxseqtobeacked=tcpd->fwd->tcp_analyze_seq_info->nextseq;
         }
     }
 
 
     /* remember what the ack/window is so we can track window updates and retransmissions */
     tcpd->fwd->window=window;
-    tcpd->fwd->lastack=ack;
-    tcpd->fwd->lastacktime.secs=pinfo->abs_ts.secs;
-    tcpd->fwd->lastacktime.nsecs=pinfo->abs_ts.nsecs;
+    tcpd->fwd->tcp_analyze_seq_info->lastack=ack;
+    tcpd->fwd->tcp_analyze_seq_info->lastacktime.secs=pinfo->abs_ts.secs;
+    tcpd->fwd->tcp_analyze_seq_info->lastacktime.nsecs=pinfo->abs_ts.nsecs;
 
 
     /* if there were any flags set for this segment we need to remember them
@@ -1722,7 +1738,7 @@ finished_checking_retransmission_type:
      */
     ackcount=0;
     prevual = NULL;
-    ual = tcpd->rev->segments;
+    ual = tcpd->rev->tcp_analyze_seq_info->segments;
     while(ual) {
         tcp_unacked_t *tmpual;
 
@@ -1756,20 +1772,20 @@ finished_checking_retransmission_type:
         }
 
         if (!prevual) {
-            tcpd->rev->segments = tmpual;
+            tcpd->rev->tcp_analyze_seq_info->segments = tmpual;
         }
         else{
             prevual->next = tmpual;
         }
         wmem_free(wmem_file_scope(), ual);
         ual = tmpual;
-        tcpd->rev->segment_count--;
+        tcpd->rev->tcp_analyze_seq_info->segment_count--;
     }
 
     /* how many bytes of data are there in flight after this frame
      * was sent
      */
-    ual=tcpd->fwd->segments;
+    ual=tcpd->fwd->tcp_analyze_seq_info->segments;
     if (tcp_track_bytes_in_flight && seglen!=0 && ual && tcpd->fwd->valid_bif) {
         guint32 first_seq, last_seq, in_flight;
 
@@ -6016,28 +6032,21 @@ dissect_tcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _U_)
         }
     }
 
-    if (tcpd && ((tcpd->fwd && tcpd->fwd->command) || (tcpd->rev && tcpd->rev->command))) {
+    if (tcp_display_process_info && tcpd && ((tcpd->fwd && tcpd->fwd->process_info && tcpd->fwd->process_info->command) ||
+                 (tcpd->rev && tcpd->rev->process_info && tcpd->rev->process_info->command))) {
         field_tree = proto_tree_add_subtree(tcp_tree, tvb, offset, 0, ett_tcp_process_info, &ti, "Process Information");
         PROTO_ITEM_SET_GENERATED(ti);
-        if (tcpd->fwd && tcpd->fwd->command) {
-            proto_tree_add_uint_format_value(field_tree, hf_tcp_proc_dst_uid, tvb, 0, 0,
-                                             tcpd->fwd->process_uid, "%u", tcpd->fwd->process_uid);
-            proto_tree_add_uint_format_value(field_tree, hf_tcp_proc_dst_pid, tvb, 0, 0,
-                                             tcpd->fwd->process_pid, "%u", tcpd->fwd->process_pid);
-            proto_tree_add_string_format_value(field_tree, hf_tcp_proc_dst_uname, tvb, 0, 0,
-                                               tcpd->fwd->username, "%s", tcpd->fwd->username);
-            proto_tree_add_string_format_value(field_tree, hf_tcp_proc_dst_cmd, tvb, 0, 0,
-                                               tcpd->fwd->command, "%s", tcpd->fwd->command);
+        if (tcpd->fwd && tcpd->fwd->process_info && tcpd->fwd->process_info->command) {
+            proto_tree_add_uint(field_tree, hf_tcp_proc_dst_uid, tvb, 0, 0, tcpd->fwd->process_info->process_uid);
+            proto_tree_add_uint(field_tree, hf_tcp_proc_dst_pid, tvb, 0, 0, tcpd->fwd->process_info->process_pid);
+            proto_tree_add_string(field_tree, hf_tcp_proc_dst_uname, tvb, 0, 0, tcpd->fwd->process_info->username);
+            proto_tree_add_string(field_tree, hf_tcp_proc_dst_cmd, tvb, 0, 0, tcpd->fwd->process_info->command);
         }
-        if (tcpd->rev && tcpd->rev->command) {
-            proto_tree_add_uint_format_value(field_tree, hf_tcp_proc_src_uid, tvb, 0, 0,
-                                             tcpd->rev->process_uid, "%u", tcpd->rev->process_uid);
-            proto_tree_add_uint_format_value(field_tree, hf_tcp_proc_src_pid, tvb, 0, 0,
-                                             tcpd->rev->process_pid, "%u", tcpd->rev->process_pid);
-            proto_tree_add_string_format_value(field_tree, hf_tcp_proc_src_uname, tvb, 0, 0,
-                                               tcpd->rev->username, "%s", tcpd->rev->username);
-            proto_tree_add_string_format_value(field_tree, hf_tcp_proc_src_cmd, tvb, 0, 0,
-                                               tcpd->rev->command, "%s", tcpd->rev->command);
+        if (tcpd->rev && tcpd->rev->process_info && tcpd->rev->process_info->command) {
+            proto_tree_add_uint(field_tree, hf_tcp_proc_src_uid, tvb, 0, 0, tcpd->rev->process_info->process_uid);
+            proto_tree_add_uint(field_tree, hf_tcp_proc_src_pid, tvb, 0, 0, tcpd->rev->process_info->process_pid);
+            proto_tree_add_string(field_tree, hf_tcp_proc_src_uname, tvb, 0, 0, tcpd->rev->process_info->username);
+            proto_tree_add_string(field_tree, hf_tcp_proc_src_cmd, tvb, 0, 0, tcpd->rev->process_info->command);
         }
     }
 
@@ -7114,6 +7123,11 @@ proto_register_tcp(void)
         "TCP Experimental Options with a Magic Number",
         "Assume TCP Experimental Options (253, 254) have a Magic Number and use it for dissection",
         &tcp_exp_options_with_magic);
+
+    prefs_register_bool_preference(tcp_module, "display_process_info_from_ipfix",
+        "Display process information via IPFIX",
+        "Collect and store process information retrieved from IPFIX dissector",
+        &tcp_display_process_info);
 
     register_init_routine(tcp_init);
     register_cleanup_routine(tcp_cleanup);

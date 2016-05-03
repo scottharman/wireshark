@@ -77,9 +77,10 @@ static const char dbs_etherwatch_rec_magic[]  =
     (sizeof dbs_etherwatch_rec_magic  / sizeof dbs_etherwatch_rec_magic[0])
 
 /*
- * XXX - is this the biggest packet we can get?
+ * Default packet size - maximum normal Ethernet packet size, without an
+ * FCS.
  */
-#define DBS_ETHERWATCH_MAX_PACKET_LEN   16384
+#define DBS_ETHERWATCH_MAX_ETHERNET_PACKET_LEN   1514
 
 static gboolean dbs_etherwatch_read(wtap *wth, int *err, gchar **err_info,
     gint64 *data_offset);
@@ -280,8 +281,8 @@ parse_dbs_etherwatch_packet(struct wtap_pkthdr *phdr, FILE_T fh, Buffer* buf,
     static const gchar months[] = "JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC";
     int count, line_count;
 
-    /* Make sure we have enough room for the packet */
-    ws_buffer_assure_space(buf, DBS_ETHERWATCH_MAX_PACKET_LEN);
+    /* Make sure we have enough room for a regular Ethernet packet */
+    ws_buffer_assure_space(buf, DBS_ETHERWATCH_MAX_ETHERNET_PACKET_LEN);
     pd = ws_buffer_start_ptr(buf);
 
     eth_hdr_len = 0;
@@ -358,6 +359,12 @@ parse_dbs_etherwatch_packet(struct wtap_pkthdr *phdr, FILE_T fh, Buffer* buf,
     if (num_items_scanned != 8) {
         *err = WTAP_ERR_BAD_FILE;
         *err_info = g_strdup("dbs_etherwatch: header line not valid");
+        return FALSE;
+    }
+
+    if (pkt_len < 0) {
+        *err = WTAP_ERR_BAD_FILE;
+        *err_info = g_strdup("dbs_etherwatch: packet header has a negative packet length");
         return FALSE;
     }
 
@@ -441,6 +448,22 @@ parse_dbs_etherwatch_packet(struct wtap_pkthdr *phdr, FILE_T fh, Buffer* buf,
     phdr->ts.nsecs = csec * 10000000;
     phdr->caplen = eth_hdr_len + pkt_len;
     phdr->len = eth_hdr_len + pkt_len;
+
+    if (phdr->caplen > WTAP_MAX_PACKET_SIZE) {
+        /*
+         * Probably a corrupt capture file; return an error,
+         * so that our caller doesn't blow up trying to allocate
+         * space for an immensely-large packet.
+         */
+        *err = WTAP_ERR_BAD_FILE;
+        *err_info = g_strdup_printf("dbs_etherwatch: File has %u-byte packet, bigger than maximum of %u",
+                                    phdr->caplen, WTAP_MAX_PACKET_SIZE);
+        return FALSE;
+    }
+
+    /* Make sure we have enough room, even for an oversized Ethernet packet */
+    ws_buffer_assure_space(buf, phdr->caplen);
+    pd = ws_buffer_start_ptr(buf);
 
     /*
      * We don't have an FCS in this frame.
